@@ -1,0 +1,9 @@
+site:
+  siteRG:                       "wf-rg-bethel"
+  aksLocation: 			"eastus2"
+  aksClusterName: 		"wf-bethel-cls"
+  aksClusterIdentity: 		"wf-bethel-clsId"
+  customLocationRG: 		"wf-rg-bethel"
+  customLocationName: 		"wf-bethel-custlocation"
+  customLocationLocation:       "eastus2"
+  customLocationNamespace: 	"wf-bethel-ns"

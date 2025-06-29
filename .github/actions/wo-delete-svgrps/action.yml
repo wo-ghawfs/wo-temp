@@ -1,0 +1,93 @@
+name: Delete WO Service Groups 
+description: Create service groups for the site per site config
+inputs:
+  site:
+    description: Site name, e.g., austin, boston, etc.
+    required: true
+runs:
+  using: "composite"
+  steps:
+  - name: delete service groups dynamically based on defined hierarchy levels
+    id: levels
+    shell: bash
+    run: |
+      # Source common and context info
+      ctxTenant=$(yq '.common.tenantId' .pg/sites/common/wo-common.yaml)
+
+      ctxRG=$(yq '.context.contextRG' .pg/sites/common/wo-common.yaml)
+      ctxName=$(yq '.context.contextName' .pg/sites/common/wo-common.yaml)
+      ctxLoc=$(yq '.context.contextLocation' .pg/sites/common/wo-common.yaml)
+      ctxSub=$(yq '.context.contextSubscriptionId' .pg/sites/common/wo-common.yaml)
+
+      wfloc=$(yq '.site.aksLocation' .pg/sites/${{ inputs.site }}/wo-site.yaml)
+      wfrg=$(yq '.site.customLocationRG' .pg/sites/${{ inputs.site }}/wo-site.yaml) 
+
+      echo "---- new code ---"
+
+      levels_str=$(yq -r '.hierarchy.levels' .pg/sites/common/wo-common.yaml)
+      IFS=',' read -ra levels <<< "$levels_str"
+      # num_levels=${#levels[@]}
+      # set one lower since last layer does not have a svcgrp
+      num_levels=$((${#levels[@]} - 1))
+
+      if [ "$num_levels" -eq 0 ]; then
+        echo "Missing hierachy levels. No SGs created"
+        exit 0
+      fi
+      
+      top_svcgrp="${{ inputs.site }}-svc-${levels[0]}"
+      echo "top_svcgrp is $top_svcgrp"
+      echo 
+
+      # hard code for MSFT tenant from  provideAppId
+      # set role assignment to highest level
+      echo "assign SG Contributor role to top level"
+      az role assignment create --assignee "dbd6e42d-e798-4a13-a6f2-2e4c0b50385c" --role "Service Group Contributor" \
+                                --scope "/providers/Microsoft.Management/serviceGroups/$top_svcgrp"
+
+      # check if top level svcgrp exists
+      echo "Looking for SG $top_svcgrp"
+      svcfnd=$(az rest --method get --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$top_svcgrp?api-version=2024-02-01-preview" --query id -o tsv)
+
+      echo "svcfind is $svcfnd"
+
+      if [[ "$svcfnd" == "Not Found" ]]; then
+        echo "Service Groups not found. Skip."
+        exit 0
+      fi 
+
+
+      delete_svcgrps() {
+        local site="$1"
+        local api_ver="api-version=2024-02-01-preview"
+
+        parent=$ctxTenant
+
+        for ((i=num_levels-1; i>=0; i--)); do
+          level="${levels[$i]}"
+          svcgrp_name="${site}-svc-$level"
+
+          echo "verify SG eists ..."
+          az rest --method get --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" --query id -o tsv
+          echo "Deleting svcgrp : $svcgrp_name "
+          az rest --method delete --headers "Content-Type=application/json" \
+                     --url "https://eastus2euap.management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" \
+                     --body "{'properties':{'displayName':'$svcgrp_name','parent': { 'resourceId': '/providers/Microsoft.Management/serviceGroups/$parent'}}}" \
+                     --resource https://management.azure.com
+        done
+      }
+     
+      site=${{ inputs.site }}
+      delete_svcgrps "$site"
+
+      # --- delete service group from context --
+      az extension add -s .exts/workload_orchestration-1.1.6-py3-none-any.whl -y || {
+        echo "Failed to add 'workload-orchestration' extension. Please verify the extension name in Azure CLI documentation."
+        exit 1
+      }
+
+      # --- site reference context update only done for highest level SG ---
+      echo "update site reference in context"
+      az workload-orchestration context site-reference delete --subscription "$ctxSub" --resource-group "$ctxRG" --context-name "$ctxName" --name "$top_svcgrp" -y 
+
+      echo "All service groups deleted and site reference removed"

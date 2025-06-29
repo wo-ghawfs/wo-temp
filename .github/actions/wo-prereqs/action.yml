@@ -1,0 +1,26 @@
+name: Install extensions and register providers
+description: Composite action to set up extensions and providers
+runs:
+  using: "composite"
+  steps:
+    - name: install extensions
+      shell: bash
+      run: |
+        echo "setting up extensions"
+        az extension add --name customlocation
+        az extension add --name k8s-extension
+        az extension add --name connectedk8s
+
+        # az extension add --name customlocation --version 0.1.3
+        # az extension add --name k8s-extension --version 1.6.3
+        # az extension add --name connectedk8s --version 1.10.7
+
+        echo "registering providers"
+        az provider register --namespace Microsoft.Edge
+        az provider register --namespace Microsoft.ContainerService && az provider register --namespace Microsoft.ExtendedLocation
+        az provider register --namespace Microsoft.KubernetesConfiguration && az provider register --namespace Microsoft.Kubernetes
+
+        echo "wo-prereq setup completed"
+        echo
+        echo "az version "
+        az version

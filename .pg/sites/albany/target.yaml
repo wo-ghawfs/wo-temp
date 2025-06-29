@@ -1,0 +1,25 @@
+target:
+  albany:
+  # - name: "alb-ct-1"
+  #   level: "country"
+  #   caps: ["azure-soap","azure-shampoo"]
+  #   scope: "wotxpga"
+  #   spec: "targetspecs.json"
+
+  # - name: "alb-rg-1"
+  #   level: "region"
+  #   caps: ["azure-soap","azure-shampoo"]
+  #   scope: "wotxpga"
+  #   spec: "targetspecs.json"
+
+  - name: "alb-ft-1"
+    level: "factory"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"
+
+  - name: "alb-li-1"
+    level: "line"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"

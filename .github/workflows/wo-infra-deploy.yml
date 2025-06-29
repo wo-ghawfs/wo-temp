@@ -1,0 +1,138 @@
+#------------------------------------------------------------------------
+#
+# The workflow helps with creating an arc connected cluster as necessary
+# and setting it up for workload orchestration operational readiness
+# 
+# ---- No Arc-connected Cluster   ---> Create AKS cluster, Arc-connect
+# ----   Arc-connected Cluster    ---> Validate cluster
+#
+# workflow action: 
+#
+#      wo-setuponly-arc-conn-cls  ---> Make cluster WO ready
+#      wo-all-in-one-arc-conn-cls ---> WO ready + svgrps + targets
+#
+#------------------------------------------------------------------------
+
+name: wo-infra-deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        description:  choose an action
+        default: none
+        options:
+        - none
+        - wo-setuponly-arc-conn-cls
+        - wo-all-in-one-arc-conn-cls
+        - wo-setup-svgrps-targets
+        - wo-setup-svgrps
+        - wo-setup-targets
+        - wo-delete-targets-svgrps
+        - wo-delete-targets
+        - wo-delete-svgrps
+        - wo-setuponly-aks-cls
+        - wo-all-in-one-aks-cls
+        required: true
+      sites:
+        type: choice
+        description: choose location
+        default: none
+        options:
+        - none
+        - austin 
+        - boston
+        - chicago
+        - dallas
+        - eugene
+        - frisco
+        required: true
+      commands:
+        type: string
+        description: optional additional directions
+        default: "no action"
+        required: true
+      usesiterg:
+        type: string
+        description: TESTING siteRG override
+        default: true
+
+permissions:
+  id-token: write # for actions
+  contents: write # for actions/checkout
+
+jobs:
+
+  call-wo-setuponly-arc-conn-cls:
+    if: ${{ (github.event.inputs.action == 'wo-setuponly-arc-conn-cls') && github.event.inputs.sites != 'none' }}
+    uses: ./.github/workflows/wo-setuponly-arc-conn-cls-reusable.yml
+    with:
+      site: ${{ github.event.inputs.sites }}
+      rg: ${{ github.event.inputs.usesiterg }}
+    secrets:
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  call-wo-all-in-one-arc-conn-cls:
+     if: ${{ github.event.inputs.action == 'wo-all-in-one-arc-conn-cls' && github.event.inputs.sites != 'none' }}
+     uses: ./.github/workflows/wo-all-in-one-arc-conn-cls-reusable.yml
+     with:
+       site: ${{ github.event.inputs.sites }}
+       rg: ${{ github.event.inputs.usesiterg }}
+     secrets:
+       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+
+  action-none:
+    if: ${{ github.event.inputs.action == 'none' && github.event.inputs.sites == 'none' }}
+    env:
+      rg:  ${{ github.event.inputs.usesiterg }}
+      site:  ${{ github.event.inputs.sites }}
+      action:  ${{ github.event.inputs.action }}
+      cmdsinput:  ${{ github.event.inputs.commands }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Azure setup
+      id: azsetup
+      uses: ./.github/actions/wo-azure-setup
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        azcliversion: "2.73.0"
+
+    - name: Install prereq extensions
+      id: wo-prereqs
+      uses: ./.github/actions/wo-prereqs
+
+    - name: Source site info
+      id: getsiteinfo
+      if: ${{ github.event.inputs.sites != 'none' }}
+      uses: ./.github/actions/wo-get-site-info
+      with:
+        site: ${{ github.event.inputs.sites }}
+        rg: ${{ github.event.inputs.usesiterg }}
+
+    - name: Show runner hardware info
+      shell: bash
+      run: |
+        echo "Runner OS: $RUNNER_OS"
+        echo "Runner Architecture: $RUNNER_ARCH"
+        echo "Runner Name: $RUNNER_NAME"
+        uname -a
+        lscpu || true
+        cat /proc/cpuinfo || true
+        free -h || true
+
+    - name: Execute command line
+      run: |
+        echo "command: ${{ env.cmdsinput }}"
+        ${{ env.cmdsinput }}

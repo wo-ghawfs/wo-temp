@@ -1,0 +1,11 @@
+name: Setup common resources and utilities
+description: Extracts site details for a given siteinput
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Workload Orchestration Extension
+      uses: ./.github/actions/wo-install-wo-extension
+
+    - name: yq
+      uses: mikefarah/yq@3.3.0

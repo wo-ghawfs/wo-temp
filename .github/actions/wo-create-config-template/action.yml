@@ -1,0 +1,100 @@
+name: Create Workload Orchestration Config Template
+description: Creates an Azure Workload Orchestration Config Template using provided parameters
+
+inputs:
+  azure-credentials:
+    description: 'Azure credentials for authentication'
+    required: true
+  resource-group:
+    description: 'Azure Resource Group name'
+    required: true
+  location:
+    description: 'Azure region location'
+    required: true
+  config-template-name:
+    description: 'Name of the config template (if not provided, read from template file)'
+    required: false
+  version:
+    description: 'Version of the config template (if not provided, read from template file)'
+    required: false
+  config-template-file:
+    description: 'Path to the configuration template file'
+    required: true
+  description:
+    description: 'Description of the config template'
+    required: false
+    
+runs:
+  using: composite
+  steps:
+    - name: Read Template Metadata
+      shell: bash
+      run: |
+        # Read values from template file
+        TEMPLATE_FILE="${{ inputs.config-template-file }}"
+        
+        # Read schema information
+        SCHEMA_NAME=$(yq eval '.schema.name' "$TEMPLATE_FILE")
+        SCHEMA_VERSION=$(yq eval '.schema.version' "$TEMPLATE_FILE")
+
+        # Get config template name/version from metadata (if present) or use defaults
+        if [ -n "${{ inputs.config-template-name }}" ]; then
+          FINAL_NAME="${{ inputs.config-template-name }}"
+        else
+          TEMPLATE_NAME=$(yq eval '.metadata.name' "$TEMPLATE_FILE" || echo "")
+          FINAL_NAME=${TEMPLATE_NAME:-"common-config"}  # Default if not provided
+        fi
+
+        if [ -n "${{ inputs.version }}" ]; then
+          FINAL_VERSION="${{ inputs.version }}"
+        else
+          TEMPLATE_VERSION=$(yq eval '.metadata.version' "$TEMPLATE_FILE" || echo "")
+          if [ -z "$TEMPLATE_VERSION" ]; then
+            echo "Error: Version must be provided either in template file or as input"
+            exit 1
+          fi
+          FINAL_VERSION="$TEMPLATE_VERSION"
+        fi
+
+        # Set environment variables for next steps
+        echo "CONFIG_NAME=$FINAL_NAME" >> $GITHUB_ENV
+        echo "CONFIG_VERSION=$FINAL_VERSION" >> $GITHUB_ENV
+        echo "SCHEMA_NAME=$SCHEMA_NAME" >> $GITHUB_ENV
+        echo "SCHEMA_VERSION=$SCHEMA_VERSION" >> $GITHUB_ENV
+    
+    - name: Check Schema Version
+      shell: bash
+      run: |
+        if ! az workload-orchestration schema version show \
+          -g ${{ inputs.resource-group }} \
+          --schema-name ${{ env.SCHEMA_NAME }} \
+          -n ${{ env.SCHEMA_VERSION }}; then
+          echo "Error: Schema version ${{ env.SCHEMA_VERSION }} does not exist for schema ${{ env.SCHEMA_NAME }}"
+          echo "Please ensure the schema exists before creating the config template."
+          exit 1
+        fi
+        echo "Schema version exists. Proceeding."
+    
+    - name: Create Config Template
+      shell: bash
+      run: |
+        
+        # Check if config template version already exists
+        if ! az workload-orchestration config-template version show \
+          -g ${{ inputs.resource-group }} \
+          --config-template-name ${{ env.CONFIG_NAME }} \
+          -n ${{ env.CONFIG_VERSION }}; then
+          
+          echo "Config template version not found. Creating new config template..."
+          
+          # Execute the command with all parameters
+          az workload-orchestration config-template create \
+            -g ${{ inputs.resource-group }} \
+            -l ${{ inputs.location }} \
+            --config-template-name ${{ env.CONFIG_NAME }} \
+            --config-template-file "${{ inputs.config-template-file }}" \
+            --version ${{ env.CONFIG_VERSION }} \
+            --description "${{ inputs.description }}"
+        else
+          echo "Config template version already exists. Skipping creation."
+        fi

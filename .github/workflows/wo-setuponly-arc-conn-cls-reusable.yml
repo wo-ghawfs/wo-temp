@@ -1,0 +1,87 @@
+# Resusable workflow to wo-ready a given cluster
+# After verifying cluster connectivity, the workflow
+# will install all the extensions and enable CL
+
+name: wo-ready-arc-conn-cls (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      site:
+        required: true
+        type: string
+      rg:
+        required: true
+        type: string
+    secrets:
+      AZURE_CLIENT_ID:
+        required: true
+      AZURE_TENANT_ID:
+        required: true
+      AZURE_SUBSCRIPTION_ID:
+        required: true
+
+jobs:
+
+  wo-setuponly-arc-conn-cls:
+    env:
+      site: ${{ inputs.site }}
+      rg: ${{ inputs.rg }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Azure setup
+      id: azsetup
+      uses: ./.github/actions/wo-azure-setup
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        azcliversion: "2.73.0"
+
+    - name: Setup common resources
+      uses: ./.github/actions/setup-common
+
+    - name: Source site info
+      id: siteinfo
+      uses: ./.github/actions/wo-get-site-info
+      with:
+        site: ${{ inputs.site }}
+        rg: ${{ inputs.rg }}
+
+    - name: Install prereq extensions
+      id: wo-prereqs
+      uses: ./.github/actions/wo-prereqs
+
+    - name: Setup resource group
+      id: rgsetup
+      run: |
+        # az group create --location ${{ steps.siteinfo.outputs.siteLoc }}  --name ${{ steps.siteinfo.outputs.siteRG }}
+        az group create --location ${{ steps.siteinfo.outputs.siteLoc }}  --name ${{ steps.siteinfo.outputs.rg }}
+
+    - name: Check for wo readiness
+      id: check-wo-ready
+      uses: ./.github/actions/wo-check-aks-cluster
+      with:
+        site: ${{ inputs.site }}
+        rg: ${{ inputs.rg }}
+        # rg: ${{ steps.siteinfo.outputs.rg }}
+        siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
+
+
+    - name: Create w-o ready cluster
+      if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
+      id: aksClsWo
+      uses: ./.github/actions/wo-setup-aks-cluster
+      with:
+        site: ${{ inputs.sites }}
+        rg: ${{ inputs.rg }}
+        akscls: ${{ steps.check-wo-ready.outputs.akscls }}
+        akscon: ${{ steps.check-wo-ready.outputs.akscon }}
+        cusloc: ${{ steps.check-wo-ready.outputs.cusloc }}
+        woextn: ${{ steps.check-wo-ready.outputs.woextn }}
+        aiocrt: ${{ steps.check-wo-ready.outputs.aiocrt }}
+

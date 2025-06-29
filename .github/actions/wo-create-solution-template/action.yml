@@ -1,0 +1,152 @@
+name: Create Workload Orchestration Solution Template
+description: Creates an Azure Workload Orchestration Solution Template using provided parameters
+
+inputs:
+  app-name:
+    description: 'Name of the application (folder name)'
+    required: true
+  azure-credentials:
+    description: 'Azure credentials for authentication'
+    required: true
+  resource-group:
+    description: 'Azure Resource Group name'
+    required: true
+  location:
+    description: 'Azure region location'
+    required: true
+  solution-template-name:
+    description: 'Name of the solution template (if not provided, read from template file)'
+    required: false
+  solution-template-version:
+    description: 'Version of the solution template (if not provided, read from template file)'
+    required: false
+  capabilities:
+    description: 'Capabilities for the solution template as JSON array (e.g. ["cap1","cap2"]). If not provided, read from metadata'
+    required: false
+    type: string
+    default: '[]'
+  template-file:
+    description: 'Path to the solution template file'
+    required: true
+  specification-file:
+    description: 'Path to the specification file'
+    required: true
+  metadata-file:
+    description: 'Path to the metadata file'
+    required: true
+  description:
+    description: 'Description of the solution template'
+    required: false
+  enable-external-validation:
+    description: 'Enable external validation for the solution template'
+    required: false
+    type: string
+
+runs:
+  using: composite
+  steps:
+
+    - name: Read Template Metadata
+      shell: bash
+      run: |
+        # Read name and version from template file
+        TEMPLATE_NAME=$(yq eval '.metadata.name' "${{ inputs.template-file }}")
+        TEMPLATE_VERSION=$(yq eval '.metadata.version' "${{ inputs.template-file }}")
+        
+        # Read schema info
+        SCHEMA_NAME=$(yq eval '.schema.name' "${{ inputs.template-file }}")
+        SCHEMA_VERSION=$(yq eval '.schema.version' "${{ inputs.template-file }}")
+
+        # Read description from metadata file
+        TEMPLATE_DESCRIPTION=$(yq eval '.description' "${{ inputs.metadata-file }}")
+        
+        # Use provided values or fallback to metadata values using bash conditionals
+        if [ -n "${{ inputs.solution-template-name }}" ]; then
+          FINAL_NAME="${{ inputs.solution-template-name }}"
+        else
+          FINAL_NAME="$TEMPLATE_NAME"
+        fi
+        
+        if [ -n "${{ inputs.solution-template-version }}" ]; then
+          FINAL_VERSION="${{ inputs.solution-template-version }}"
+        else
+          FINAL_VERSION="$TEMPLATE_VERSION"
+        fi
+        
+        # Read capabilities from metadata file and format as array string
+        echo "Input capabilities: ${{ inputs.capabilities }}"
+        if [ "${{ inputs.capabilities }}" != "[]" ]; then
+          FINAL_CAPABILITIES="${{ inputs.capabilities }}"
+          echo "Using provided capabilities: $FINAL_CAPABILITIES"
+        else
+          echo "Reading capabilities from metadata file..."
+          TEMPLATE_CAPABILITIES="[$(yq eval '.capabilities[]' "${{ inputs.metadata-file }}" | tr '\n' ',' | sed 's/,$//')]"
+          FINAL_CAPABILITIES="$TEMPLATE_CAPABILITIES"
+          echo "Using capabilities from metadata: $FINAL_CAPABILITIES"
+        fi
+
+        # Validate final capabilities is not empty array
+        if [ "$FINAL_CAPABILITIES" = "[]" ]; then
+          echo "Error: No capabilities found. Capabilities cannot be empty - please provide capabilities or ensure they exist in metadata file."
+          exit 1
+        fi
+
+        # Set as environment variables for subsequent steps
+        echo "TEMPLATE_NAME=$FINAL_NAME" >> $GITHUB_ENV
+        echo "TEMPLATE_VERSION=$FINAL_VERSION" >> $GITHUB_ENV
+        # Use provided description or fallback to metadata value
+        if [ -n "${{ inputs.description }}" ]; then
+          FINAL_DESCRIPTION="${{ inputs.description }}"
+        else
+          FINAL_DESCRIPTION="$TEMPLATE_DESCRIPTION"
+        fi
+
+        # Read enable-external-validation from metadata file
+        TEMPLATE_ENABLE_VALIDATION=$(yq eval '.enable-external-validation' "${{ inputs.metadata-file }}")
+
+        # Use provided value or fallback to metadata value
+        if [ -n "${{ inputs.enable-external-validation }}" ]; then
+          FINAL_ENABLE_VALIDATION="${{ inputs.enable-external-validation }}"
+        else
+          FINAL_ENABLE_VALIDATION="$TEMPLATE_ENABLE_VALIDATION"
+        fi
+
+        echo "TEMPLATE_ENABLE_VALIDATION=$FINAL_ENABLE_VALIDATION" >> $GITHUB_ENV
+
+        echo "SCHEMA_NAME=$SCHEMA_NAME" >> $GITHUB_ENV
+        echo "SCHEMA_VERSION=$SCHEMA_VERSION" >> $GITHUB_ENV
+        echo "TEMPLATE_CAPABILITIES=$FINAL_CAPABILITIES" >> $GITHUB_ENV
+        echo "TEMPLATE_DESCRIPTION=$FINAL_DESCRIPTION" >> $GITHUB_ENV
+
+    - name: Check Schema Version
+      shell: bash
+      run: |
+        if ! az workload-orchestration schema version show \
+          -g ${{ inputs.resource-group }} \
+          --schema-name ${{ env.SCHEMA_NAME }} \
+          -n ${{ env.SCHEMA_VERSION }}; then
+          echo "Error: Schema version ${{ env.SCHEMA_VERSION }} does not exist for schema ${{ env.SCHEMA_NAME }}"
+          echo "Please ensure the schema and version exist before creating the solution template."
+          exit 1
+        fi
+        echo "Schema version exists. Proceeding."
+
+    - name: Create Solution Template
+      shell: bash
+      run: |        
+        if ! az workload-orchestration solution-template version show \
+          -g ${{ inputs.resource-group }} \
+          --solution-template-name ${{ env.TEMPLATE_NAME }} \
+          -n ${{ env.TEMPLATE_VERSION }}; then
+          echo "Solution template version not found. Creating new version..."
+          az workload-orchestration solution-template create \
+            -g ${{ inputs.resource-group }} \
+            -l ${{ inputs.location }} \
+            --capabilities ${{ env.TEMPLATE_CAPABILITIES }} \
+            --configuration-template-file "${{ inputs.template-file }}" \
+            --specification "${{ inputs.specification-file }}" \
+            --description "${{ env.TEMPLATE_DESCRIPTION }}" \
+            --enable-external-validation ${{ env.TEMPLATE_ENABLE_VALIDATION }}
+        else
+          echo "Solution template version already exists. Skipping creation."
+        fi

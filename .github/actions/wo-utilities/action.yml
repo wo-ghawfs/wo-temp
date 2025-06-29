@@ -1,0 +1,16 @@
+name: utilities
+description: Composite Action to install a few common utilities
+inputs:
+  utilities:
+    required: false
+    default: "yq"
+    description: "list space separated utility names"
+runs:
+  using: "composite"
+  steps:
+    - name: install-utilities
+      run: |
+        echo "Installing ${{ inputs.utilities }}"
+      shell: bash
+    - name: yq
+      uses: mikefarah/yq@3.3.0

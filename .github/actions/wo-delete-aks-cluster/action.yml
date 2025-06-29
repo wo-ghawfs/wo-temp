@@ -1,0 +1,36 @@
+name: Delete AKS cluster 
+description: Delete AKS cluster
+inputs:
+  site:
+    description: site used for AKS cluster
+    required: true
+  rg:
+    description: RG to be used for AKS cluster
+    required: true
+  siteClsName:
+    description: Site AKS Cluster name
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: check if cluster exists
+      id: deletecluster
+      shell: bash
+      run: |
+        echo " "
+        echo "Delete cluster: ${{ inputs.siteClsName }} site: ${{ inputs.site }} rg: ${{ inputs.rg }}"
+        aksName=$(az aks show --resource-group "${{ inputs.rg }}" --name "${{ inputs.siteClsName }}" 2>&1) || true
+        exit_code=$?
+        echo "debug exit code: $exit_code"
+        echo "debug aksName: $aksName"
+        if [[ $exit_code -ne 0 ]] || echo "$aksName" | grep -q "ResourceNotFound"; then
+          echo "cluster does not exist"
+        else
+          echo "Delete cluster"
+          az connectedk8s delete --resource-group "${{ inputs.rg }}" --name "${{ inputs.siteClsName }}"
+          az aks delete --resource-group "${{ inputs.rg }}" --name "${{ inputs.siteClsName }}"
+
+          echo "Delete cluster-identity"
+          az identity delete --resource-group "${{ inputs.rg }}" --name "${{ inputs.rg }}"-Cluster-Identity
+        fi

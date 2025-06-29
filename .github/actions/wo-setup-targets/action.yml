@@ -1,0 +1,104 @@
+name: Deploy targets per site based target.yaml 
+description: Deploy targets per site based target.yaml
+inputs:
+  site:
+    description: Site name, e.g., austin, boston, etc.
+    required: true
+  rg:
+    description: RG to be used
+    required: true
+runs:
+  using: "composite"
+  steps:
+  - name: source site info
+    id: siteinfo
+    uses: ./.github/actions/wo-get-site-info
+    with:
+      site: ${{ inputs.site }}
+      rg: ${{ inputs.rg }}
+
+  - name: deploy targets
+    id: targetinfo
+    shell: bash
+    run: |
+      echo "Deploying targets at ${{ inputs.site }} "
+      pwd
+      echo "Get target info"
+
+      # Source common info
+      # wfloc=$(yq '.site.aksLocation' .pg/sites/${{ inputs.site }}/wo-site.yaml)
+      # wfrg=$(yq '.site.customLocationRG' .pg/sites/${{ inputs.site }}/wo-site.yaml)
+      wfloc=${{ steps.siteinfo.outputs.location }}
+      wfrg=${{ steps.siteinfo.outputs.rg }}
+
+      # echo "rg=$(yq '.common.rg' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+      # echo "location=$(yq '.common.location' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+      echo "levels=$(yq '.hierarchy.levels' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+
+      # Correctly compute the number of targets and export it
+      numTar=$(yq '.target.${{ inputs.site }} | length' .pg/sites/${{ inputs.site }}/target.yaml)
+      if [[ -z "$numTar" || "$numTar" -eq 0 ]]; then
+        echo "No targets found to deploy."
+        exit 0
+      fi
+
+      echo "numTar=$numTar" >> $GITHUB_ENV
+
+      # Ensure numTar is exported properly and loop syntax is correct
+      source $GITHUB_ENV
+
+      az cloud update --endpoint-resource-manager "https://eastus2euap.management.azure.com"
+      echo "Deploying $numTar targets..."
+      for ((i=0; i<numTar; i++)); do
+
+        target_name=$(yq ".target.${{ inputs.site }}[$i].name" .pg/sites/${{ inputs.site }}/target.yaml)
+        target_caps=$(yq ".target.${{ inputs.site }}[$i].caps" .pg/sites/${{ inputs.site }}/target.yaml)
+        target_spec=$(yq ".target.${{ inputs.site }}[$i].spec" .pg/sites/${{ inputs.site }}/target.yaml)
+        target_level=$(yq ".target.${{ inputs.site }}[$i].level" .pg/sites/${{ inputs.site }}/target.yaml)
+        target_scope=$(yq ".target.${{ inputs.site }}[$i].scope" .pg/sites/${{ inputs.site }}/target.yaml)
+
+        #Additional action for each target
+        echo "Deploying target $target_name"
+        echo 
+
+        # get contextId
+        contextId=$(az workload-orchestration context show -g ${{ steps.siteinfo.outputs.ctxRG }} -n ${{ steps.siteinfo.outputs.ctxName }} \
+                                                --subscription ${{ steps.siteinfo.outputs.ctxSub }} --query id)
+
+        # Create target
+        az workload-orchestration target create --resource-group $wfrg --location $wfloc --name $target_name --display-name "$target_name" \
+                                 --hierarchy-level "$target_level" --capabilities "$target_caps" --description "$target_name-$target_level" \
+                                 --solution-scope "$wfrg" --target-specification '@.pg/sites/${{ inputs.site }}/targetspecs.json' \
+                                 --extended-location ".pg/sites/${{ inputs.site }}/custom-location.json" \
+                                 --context-id "/subscriptions/973d15c6-6c57-447e-b9c6-6d79b5b784ab/resourceGroups/Mehoopany/providers/Microsoft.Edge/contexts/Mehoopany-Context"
+
+        #link target to svcgrp
+        targetId=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query id --output tsv)
+
+        # give time for previous op to complete
+        sleep 60
+
+        if [[ "$target_level" == "line" ]]; then
+          # Set line level parent to factory level 
+          target_level="factory"
+
+          # permissions on svc grp 
+          # Workload orchestration Provider App ID
+          echo "role assignment to tag leaf to next level"
+          az role assignment create --assignee "dbd6e42d-e798-4a13-a6f2-2e4c0b50385c" --role "Service Group Contributor" \
+                                    --scope "/providers/Microsoft.Management/serviceGroups/${{ inputs.site }}-svc-$target_level"
+
+        fi
+
+        echo "Target created. Associate target to svcgrp ..."
+        az rest --method put --url "$targetId/providers/Microsoft.Relationships/serviceGroupMember/SGRelation?api-version=2023-09-01-preview" \
+                             --body "{'properties':{ 'targetId': '/providers/Microsoft.Management/serviceGroups/${{ inputs.site }}-svc-$target_level'}}"
+      done
+
+      az cloud update --endpoint-resource-manager "https://management.azure.com"
+      # display targets 
+      echo "Targets created ..."
+      az workload-orchestration target list -g $wfrg -o table
+
+      echo
+      echo "$numTar targets created."

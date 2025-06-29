@@ -1,0 +1,208 @@
+name: Check if this is a WO AKS cluster 
+description: Create a workload-orchestration ready AKS cluster
+inputs:
+  site:
+    description: site used for AKS cluster
+    required: true
+  rg:
+    description: RG to be used for AKS cluster
+    required: true
+  siteClsName:
+    description: Site AKS Cluster name
+    required: true
+outputs:
+  akscls:
+    description: indicates if AKS cluster already exists
+    value: ${{ steps.akswoready.outputs.akscls }}
+  akscon:
+    description: indicates if AKS cluster is arc connected
+    value: ${{ steps.akswoready.outputs.akscon }}
+  cusloc:
+    description: indicate if AKS cluster customLoc exists
+    value: ${{ steps.akswoready.outputs.cusloc }}
+  woextn:
+    description: indicates if connected cluster is has WO extn
+    value: ${{ steps.akswoready.outputs.woextn }}
+  aiocrt:
+    description: indicates if connected cluster is has aiocert extn
+    value: ${{ steps.akswoready.outputs.aiocrt }}
+  woready:
+    description: indicates if connected cluster is WO ready
+    value: ${{ steps.akswoready.outputs.woready }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: source site info
+      id: siteinfo
+      uses: ./.github/actions/wo-get-site-info
+      with:
+        site: ${{ inputs.site }}
+        rg: ${{ inputs.rg }}
+
+    - name: check for cluster details
+      id: akswoready
+      shell: bash
+      run: |
+        akscls="false"
+        akscon="false"
+        cusloc="false"
+        aiocrt="false"
+        woextn="false"
+        woready="false"
+
+
+        az account set --subscription "d1e52cbc-b073-42e2-a0a0-c2f547118a6e"
+        echo " "
+        echo "get aks cluster details"
+        # Disable 'errexit' for this line, so script continues even if az fails
+        # aksName=$(az aks show --resource-group "${{ inputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+        aksName=$(az rest --method get \
+                --resource https://management.azure.com \
+                --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.ContainerService/managedClusters/${{ inputs.siteClsName }}?api-version=2025-04-01" 2>&1) || true
+        # --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ inputs.rg }}/providers/Microsoft.ContainerService/managedClusters/${{ inputs.siteClsName }}?api-version=2025-04-01" 2>&1) || true
+    
+        exit_code=$?
+        echo "exit code: $exit_code"
+        echo "aksName: $aksName"
+        if [[ $exit_code -eq 0 ]] && echo "$aksName" | grep -Eq "ResourceNotFound|InvalidApiVersionParameter|No HTTP|InvalidAPI"; then
+          echo "CLUSTER DOES NOT EXIST"
+          akscls="false"
+        else
+          echo "CLUSTER already exists"
+          akscls="true"
+        fi
+   
+        if [[ "$akscls" == "false" ]]; then
+          echo "Exit - cluster not found."
+
+          # no point going further, set return values to false
+          echo "updating GITHUB_OUTPUT with values"
+          echo "akscls=false" >> "$GITHUB_OUTPUT"
+          echo "akscon=false" >> "$GITHUB_OUTPUT"
+          echo "cusloc=false" >> "$GITHUB_OUTPUT"
+          echo "woextn=false" >> "$GITHUB_OUTPUT"
+          echo "aiocrt=false" >> "$GITHUB_OUTPUT"
+          echo "woready=false" >> "$GITHUB_OUTPUT"
+
+          cat "$GITHUB_OUTPUT"
+          exit 0
+        fi
+    
+        echo "CHECK IF THIS IS A CONNECTED CLUSTER"
+        # Disable 'errexit' for this line, so script continues even if az fails
+        # aksctd=$(az connectedk8s show --resource-group "${{ inputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+        aksctd=$(az rest --method get \
+                --resource https://management.azure.com \
+                --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ inputs.siteClsName }}?api-version=2024-07-01-preview" 2>&1) || true
+        # --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ inputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ inputs.siteClsName }}?api-version=2024-07-01-preview" 2>&1) || true
+        exit_code=$?
+        echo "exit code: $exit_code"
+        echo "aksctd: $aksctd"
+        # if [[ $exit_code -ne 0 ]] || echo "$aksctd" | grep -q "ResourceNotFound"; then
+        if [[ $exit_code -ne 0 ]] || echo "$aksName" | grep -Eq "ResourceNotFound|InvalidApiVersionParameter|No HTTP"; then
+        # if [[ $exit_code -ne 3 ]]; then
+          echo "CONNECTED CLUSTER DOES NOT EXIST"
+          akscon="false"
+        else
+          echo "CONNECTED CLUSTER ALREADY EXISTS"
+          akscon="true"
+        fi
+
+        echo "CHECK IF CUSTOMLOCATION IS ENABLED ON CONNECTED CLUSTER"
+        # concls=$(az customlocation show --resource-group "${{ inputs.rg }}" --name "${{ steps.siteinfo.outputs.sitecusLocName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+        concls=$(az rest --method GET \
+               --resource https://management.azure.com \
+               --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.ExtendedLocation/customLocations/${{ steps.siteinfo.outputs.sitecusLocName }}?api-version=2021-08-15" 2>&1) || true
+        exit_code=$?
+        echo "exit code: $exit_code"
+        echo "concls: $concls"
+        #if [[ -n "$concls" ]]; then
+        if [[ $exit_code -eq 0 ]] && echo "$concls" | grep -Eq "ResourceNotFound|InvalidApiVersionParameter|No HTTP|InvalidAPI|ERROR"; then
+          echo "CUSTOMLOCATION DOES NOT EXIST"
+          cusloc="false"
+          aiocrt="false"
+          woextn="false"
+        else
+          echo 
+          echo "CUSTOMLOCATION already enabled on CONNECTED CLUSTER" 
+          cusloc="true"
+
+          echo "dumping concls:"
+          echo "$concls"
+          echo 
+
+          aio=$(az rest --method GET \
+               --resource https://management.azure.com \
+               --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/aio-certmgr?api-version=2023-05-01" --query name -o tsv 2>&1) || true
+          if [[ "$aio" == "aio-certmgr" ]]; then 
+            echo "aiocert extension exists"
+            aiocrt="true"
+          fi
+
+          wo=$(az rest --method GET \
+               --resource https://management.azure.com \
+               --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/workloadorchestration?api-version=2023-05-01" --query name -o tsv 2>&1) || true
+          if [[ "$wo" == "workloadorchestration" ]]; then 
+            echo "wo extension exists"
+            woextn="true"
+          fi
+
+          # echo "check if aiocert exists"
+          # aioext=$(echo "$concls" | yq '.clusterExtensionIds.[]' | grep workloadorchestration)
+          # if [[ -n "$aioext" ]]; then
+          #   echo "aiocert extension exists"
+          #   aiocrt="true"
+          # fi
+
+          # echo "check if wo extn exists"
+          # woextn=$(echo "$concls" | yq '.clusterExtensionIds.[]' | grep workloadorchestration)
+          # if [[ -n "$woextn" ]]; then
+          #   echo "workloadorchestration extension exists"
+          #   woextn="true"
+          # fi
+        fi
+       
+        echo "check result: woextn: $woextn aio: $aiocrt cusloc: $cusloc akscon: $akscon akscls: $akscls woready: $woready"
+
+        if [[ ("$woextn" == "true") && ("$aiocrt" == "true") && ("$cusloc" == "true") && ("$akscon" == "true") && ("$akscls" == "true") ]]; then
+        ## if [[ ("$akscon" == "true") && ("$akscls" == "true") ]]; then
+
+          woready="true"
+          echo "woready=true" >> "$GITHUB_OUTPUT"
+          echo "akscls=true" >> "$GITHUB_OUTPUT"
+          echo "akscon=true" >> "$GITHUB_OUTPUT"
+          echo "cusloc=true" >> "$GITHUB_OUTPUT"
+          echo "woextn=true" >> "$GITHUB_OUTPUT"
+          echo "aiocrt=true" >> "$GITHUB_OUTPUT"
+
+          # cuslocid=$(yq '.id' <<< $akscon)
+          cuslocid=$(echo "$concls" | yq '.id')
+          echo "cuslocid: $cuslocid"
+          # good to do
+          yq -i ".name = \"$cuslocid\"" .pg/sites/${{ inputs.site }}/custom-location.json
+          echo "updated cloc: .pg/sites/${{ inputs.site }}/custom-location.json"
+
+          echo "cluster is WO ready"
+        else
+          echo "akscls=$akscls" >> $GITHUB_OUTPUT       
+          echo "akscon=$akscon" >> $GITHUB_OUTPUT       
+          echo "cusloc=$cusloc" >> $GITHUB_OUTPUT       
+          echo "woextn=$woextn" >> $GITHUB_OUTPUT
+          echo "aiocrt=$aiocrt" >> $GITHUB_OUTPUT
+          echo "woready=$woready" >> $GITHUB_OUTPUT
+
+          echo "cluster is NOT ready"
+        fi
+
+        echo 
+        echo "--- current state ---"
+        echo "akscls:    $akscls"       
+        echo "akscon:    $akscon"       
+        echo "cusloc:    $cusloc"       
+        echo "woextn:    $woextn"
+        echo "aiocrt:    $aiocrt"
+        echo "WOREADY:   $woready"
+
+
+

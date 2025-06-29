@@ -1,0 +1,9 @@
+site:
+  siteRG:                       "wf-rg-canton"
+  aksLocation: 			"eastus2"
+  aksClusterName: 		"wf-canton-cls"
+  aksClusterIdentity: 		"wf-canton-clsId"
+  customLocationRG: 		"wf-rg-canton"
+  customLocationName: 		"wf-canton-custlocation"
+  customLocationLocation:       "eastus2"
+  customLocationNamespace: 	"wf-canton-ns"

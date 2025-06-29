@@ -1,0 +1,33 @@
+iname: 'Check Files'
+description: 'Check if a file exists in a list of files'
+
+inputs:
+  files-array:
+    description: 'JSON array of files to search in'
+    required: true
+  file-path:
+    description: 'File path to check'
+    required: true
+
+outputs:
+  found:
+    description: 'true if file was found'
+    value: ${{ steps.check.outputs.found }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check file
+      id: check
+      shell: bash
+      run: |
+        # Check if file exists in array
+        found=$(echo '${{ inputs.files-array }}' | \
+          jq --arg path "${{ inputs.file-path }}" 'contains([$path])')
+        
+        # Output result
+        echo "found=$found" >> $GITHUB_OUTPUT
+        
+        # Log result
+        echo "=== File check result:"
+        echo "File (${{ inputs.file-path }}): $found"

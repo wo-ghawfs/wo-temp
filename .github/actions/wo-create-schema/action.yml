@@ -1,0 +1,45 @@
+name: Create Workload Orchestration Schema
+description: Creates an Azure Workload Orchestration Schema using provided parameters
+
+inputs:
+  app-name:
+    description: 'Name of the application (folder name)'
+    required: true
+  azure-credentials:
+    description: 'Azure credentials for authentication'
+    required: true
+  resource-group:
+    description: 'Azure Resource Group name'
+    required: true
+  location:
+    description: 'Azure region location'
+    required: true
+  schema-file:
+    description: 'Path to the schema file relative to repository root'
+    required: true
+
+runs:
+  using: composite
+  steps:
+        
+    - name: Read Schema Details
+      shell: bash
+      run: |
+        SCHEMA_FILE="${{ inputs.schema-file }}"
+        echo "SCHEMA_NAME=$(yq eval '.metadata.name' $SCHEMA_FILE)" >> $GITHUB_ENV
+        echo "SCHEMA_VERSION=$(yq eval '.metadata.version' $SCHEMA_FILE)" >> $GITHUB_ENV
+        
+    - name: Create Schema
+      shell: bash
+      run: |
+        SCHEMA_FILE="${{ inputs.schema-file }}"
+        
+        if ! az workload-orchestration schema version show -g ${{ inputs.resource-group }} --schema-name ${{ env.SCHEMA_NAME }} -n ${{ env.SCHEMA_VERSION }}; then
+          echo "Schema version not found. Creating new schema..."
+          az workload-orchestration schema create \
+            -g ${{ inputs.resource-group }} \
+            -l ${{ inputs.location }} \
+            --schema-file "$SCHEMA_FILE"
+        else
+          echo "Schema version already exists. Skipping creation."
+        fi

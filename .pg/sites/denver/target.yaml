@@ -1,0 +1,25 @@
+target:
+  denver:
+  # - name: "den-ct-1"
+  #   level: "country"
+  #   caps: ["azure-soap","azure-shampoo"]
+  #   scope: "wotxpga"
+  #   spec: "targetspecs.json"
+
+  # - name: "den-rg-1"
+  #   level: "region"
+  #   caps: ["azure-soap","azure-shampoo"]
+  #   scope: "wotxpga"
+  #   spec: "targetspecs.json"
+
+  - name: "den-ft-1"
+    level: "factory"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"
+
+  - name: "den-li-1"
+    level: "line"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"

@@ -1,0 +1,145 @@
+name: WO Get Site Info
+description: Extracts site details for a given siteinput
+inputs:
+  site:
+    description: Site name, e.g., austin, boston, etc.
+    required: true
+  rg:
+    description: Decide if siteRG for testing is to be used for setup 
+    required: true
+outputs:
+  rg:
+    description: subscription to be used
+    value: ${{ steps.rgtouse.outputs.rg }}
+  subId:
+    description: subscription to be used
+    value: ${{ steps.siteinfo.outputs.subId }}
+  tenantId:
+    description: subscription to be used
+    value: ${{ steps.siteinfo.outputs.tenantId }}
+  location:
+    description: subscription to be used
+    value: ${{ steps.rgtouse.outputs.location }}
+  ctxTenant:
+    description: TenantId of the context
+    value: ${{ steps.siteinfo.outputs.ctxTenant }}
+  ctxRG:
+    description: RG of the context
+    value: ${{ steps.siteinfo.outputs.ctxRG }}
+  ctxSub:
+    description: subscriptionId of the context
+    value: ${{ steps.siteinfo.outputs.ctxSub }}
+  ctxLoc:
+    description: region location  of the context
+    value: ${{ steps.siteinfo.outputs.ctxLoc }}
+  ctxName:
+    description: Name of the context
+    value: ${{ steps.siteinfo.outputs.ctxName }}
+  siteLoc:
+    description: The AKS location for the site
+    value: ${{ steps.siteinfo.outputs.siteLoc }}
+  siteRG:
+    description: The resource group for the site
+    value: ${{ steps.siteinfo.outputs.siteRG }}
+  siteClsName:
+    description: The AKS cluster name
+    value: ${{ steps.siteinfo.outputs.siteClsName }}
+  siteClsId:
+    description: The AKS cluster identity
+    value: ${{ steps.siteinfo.outputs.siteClsId }}
+  sitecusLocName:
+    description: The custom location name
+    value: ${{ steps.siteinfo.outputs.sitecusLocName }}
+  sitecusLocation:
+    description: The custom location region
+    value: ${{ steps.siteinfo.outputs.sitecusLocation}}
+  sitecusLocNS:
+    description: The custom location namespace
+    value: ${{ steps.siteinfo.outputs.sitecusLocNS }}
+  whlVer:
+    description: workload-orchestration WHL file
+    value: ${{ steps.siteinfo.outputs.whlVer }}
+  extnVer:
+    description: WO extension version
+    value: ${{ steps.siteinfo.outputs.extnVer }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup resource group
+      id: rgtouse
+      shell: bash
+      run: |
+        localrg=${{ inputs.rg }}
+
+        if [[ "$localrg" == "true" ]]; then
+
+          rg=$(yq '.site.siteRG' .pg/sites/${{ inputs.site }}/wo-site.yaml)
+          location=$(yq '.site.aksLocation' .pg/sites/${{ inputs.site }}/wo-site.yaml)
+
+          echo "Override RG and use siteRG and siteLoc from in site.yml"
+          echo "rg override: $rg  location: $location"
+          echo "rg=$rg" >> $GITHUB_OUTPUT
+          echo "location=$location" >> $GITHUB_OUTPUT
+        else 
+
+          echo "rg=$(yq '.common.rg' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+          echo "location=$(yq '.common.location' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+
+        fi
+
+    - name: Get site details
+      id: siteinfo
+      shell: bash
+      run: |
+        echo "Getting info for site  ${{ inputs.site }}"
+
+        siteId=".pg/sites/${{ inputs.site }}/wo-site.yaml"
+
+        # source common info
+        # echo "rg=$(yq '.common.rg' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+        echo "subId=$(yq '.common.subscriptionId' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+        echo "tenantId=$(yq '.common.tenantId' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+        # echo "location=$(yq '.common.location' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+  
+        # Source common and context info
+        echo "ctxRG=$(yq '.context.contextRG' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+        echo "ctxLoc=$(yq '.context.contextLocation' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+        echo "ctxSub=$(yq '.context.contextSubscriptionId' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+        echo "ctxName=$(yq '.context.contextName' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+        echo "ctxTenant=$(yq '.context.contextTenantId' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+
+        echo "siteRG=$(yq '.site.siteRG' .pg/sites/${{ inputs.site }}/wo-site.yaml)" >> $GITHUB_OUTPUT
+        echo "siteLoc=$(yq '.site.aksLocation' .pg/sites/${{ inputs.site }}/wo-site.yaml)" >> $GITHUB_OUTPUT
+        echo "siteClsId=$(yq '.site.aksClusterIdentity' .pg/sites/${{ inputs.site }}/wo-site.yaml)" >> $GITHUB_OUTPUT
+        echo "siteClsName=$(yq '.site.aksClusterName' .pg/sites/${{ inputs.site }}/wo-site.yaml)" >> $GITHUB_OUTPUT
+        echo "sitecusLocNS=$(yq '.site.customLocationNamespace' .pg/sites/${{ inputs.site }}/wo-site.yaml)" >> $GITHUB_OUTPUT
+        echo "sitecusLocName=$(yq '.site.customLocationName' .pg/sites/${{ inputs.site }}/wo-site.yaml)" >> $GITHUB_OUTPUT
+        echo "sitecusLocation=$(yq '.site.customLocationLocation' .pg/sites/${{ inputs.site }}/wo-site.yaml)" >> $GITHUB_OUTPUT
+
+        echo "whlVer=$(yq '.workloadorchestration.whlVer' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+        echo "extnVer=$(yq '.workloadorchestration.extensionVer' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+
+    - name: Debug dumpinfo
+      shell: bash
+      run: |
+        echo " ------ get-info ---------"
+        echo
+        echo "rg:               ${{ steps.rgtouse.outputs.rg }}"
+        echo "subId:            ${{ steps.siteinfo.outputs.subId }}"
+        echo "tenantId:         ${{ steps.siteinfo.outputs.tenantId }}"
+        echo "location:         ${{ steps.rgtouse.outputs.location }}"
+        echo "ctxTenant:        ${{ steps.siteinfo.outputs.ctxTenant }}"
+        echo "ctxRG:            ${{ steps.siteinfo.outputs.ctxRG }}"
+        echo "ctxSub:           ${{ steps.siteinfo.outputs.ctxSub }}"
+        echo "ctxLoc:           ${{ steps.siteinfo.outputs.ctxLoc }}"
+        echo "ctxName:          ${{ steps.siteinfo.outputs.ctxName }}"
+        echo "siteLoc:          ${{ steps.siteinfo.outputs.siteLoc }}"
+        echo "siteRG:           ${{ steps.siteinfo.outputs.siteRG }}"
+        echo "siteClsName:      ${{ steps.siteinfo.outputs.siteClsName }}"
+        echo "siteClsId:        ${{ steps.siteinfo.outputs.siteClsId }}"
+        echo "sitecusLocName:   ${{ steps.siteinfo.outputs.sitecusLocName }}"
+        echo "sitecusLocation:  ${{ steps.siteinfo.outputs.sitecusLocation}}"
+        echo "sitecusLocNS:     ${{ steps.siteinfo.outputs.sitecusLocNS }}"
+        echo "whlVer:           ${{ steps.siteinfo.outputs.whlVer }}"
+        echo "extnVer:          ${{ steps.siteinfo.outputs.extnVer }}"

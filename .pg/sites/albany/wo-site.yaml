@@ -1,0 +1,9 @@
+site:
+  siteRG:                       "wf-rg-albany"
+  aksLocation: 			"eastus2"
+  aksClusterName: 		"wf-albany-cls"
+  aksClusterIdentity: 		"wf-albany-clsId"
+  customLocationRG: 		"wf-rg-albany"
+  customLocationName: 		"wf-albany-custlocation"
+  customLocationLocation:       "eastus2"
+  customLocationNamespace: 	"wf-albany-ns"

@@ -1,0 +1,5 @@
+capabilities:
+  - e2eTest-factory-Cap-1653
+  - e2eTest-line-Cap-1755
+description: 'Dummy app'
+enable-external-validation: 'true'

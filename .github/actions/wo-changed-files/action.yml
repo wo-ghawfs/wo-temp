@@ -1,0 +1,45 @@
+name: "Get Changed Files (Filtered)"
+description: "Get changed files in the last commit, filtered by input patterns"
+
+inputs:
+  files:
+    description: "Glob patterns to filter changed files"
+    required: false
+    default: '**'
+
+outputs:
+  all_changed_files:
+    description: "Changed files matching the provided patterns"
+    value: ${{ steps.filter.outputs.all_changed_files }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout with history
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref }}
+        fetch-depth: 2
+
+    - name: Get changes
+      id: changes
+      shell: bash
+      run: |
+        echo "changedfiles=$(git diff --name-only HEAD^1 HEAD | xargs)" >> $GITHUB_OUTPUT
+
+    - name: Filter and validate changes
+      id: filter
+      shell: bash
+      run: |
+        MATCHED=""
+        for file in ${{ steps.changes.outputs.changedfiles }}; do
+          if [[ "$file" == ${{ inputs.files }} ]]; then
+            echo "$file was changed"
+            # Try to validate yaml files with yq
+            if [[ "$file" == *.yaml ]] || [[ "$file" == *.yml ]]; then
+              yq eval "$file" >> /dev/null
+            fi
+            MATCHED+="$file "
+          fi
+        done
+        echo "all_changed_files=$MATCHED" >> $GITHUB_OUTPUT

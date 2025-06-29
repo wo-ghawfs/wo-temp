@@ -1,0 +1,25 @@
+target:
+  bethel:
+  # - name: "btl-ct-1"
+  #   level: "country"
+  #   caps: ["azure-soap","azure-shampoo"]
+  #   scope: "wotxpga"
+  #   spec: "targetspecs.json"
+
+  # - name: "btl-rg-1"
+  #   level: "region"
+  #   caps: ["azure-soap","azure-shampoo"]
+  #   scope: "wotxpga"
+  #   spec: "targetspecs.json"
+
+  - name: "btl-ft-1"
+    level: "factory"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"
+
+  - name: "btl-li-1"
+    level: "line"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"

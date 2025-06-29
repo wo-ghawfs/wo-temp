@@ -1,0 +1,25 @@
+target:
+  canton:
+  # - name: "cnt-ct-1"
+  #   level: "country"
+  #   caps: ["azure-soap","azure-shampoo"]
+  #   scope: "wotxpga"
+  #   spec: "targetspecs.json"
+
+  # - name: "cnt-rg-1"
+  #   level: "region"
+  #   caps: ["azure-soap","azure-shampoo"]
+  #   scope: "wotxpga"
+  #   spec: "targetspecs.json"
+
+  - name: "cnt-ft-1"
+    level: "factory"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"
+
+  - name: "cnt-li-1"
+    level: "line"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"

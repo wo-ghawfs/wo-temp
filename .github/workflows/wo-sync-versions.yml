@@ -1,0 +1,78 @@
+# A workflow to sync wo artifacts with Helm chart version
+
+name: wo-sync-versions
+
+on:
+  push:
+    branches:
+      - main
+    paths: 
+      - '.pg/apps/**/helm/Chart.yaml'
+
+permissions:
+  id-token: write # 
+  contents: write  # for actions/checkout
+
+jobs:    
+
+  sync-versions:
+    if: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+    env:
+      cmdinput: ${{ github.event.inputs.commands }}
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout 
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.head_ref }}
+        fetch-depth: 2
+      
+    - name: Azure Setup
+      id: azsetup
+      uses: ./.github/actions/wo-azure-setup
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        azcliversion: "latest"
+   
+    - name: yq
+      uses: mikefarah/yq@3.3.0  
+
+    - name: Get changes
+      id: changed-files
+      run: |
+        echo "changedfiles=$(git diff --name-only HEAD^1 HEAD | xargs)" >> $GITHUB_OUTPUT
+
+    - name: Evaluate changed files and make updates
+      run: |
+        for file in ${{ steps.changed-files.outputs.changedfiles }}; do
+
+          fileDir=$(awk '{"dirname " $0 | getline dir; print dir}' <<< $file)
+          fileName=$(awk -F / '{print $(NF)}' <<< $file)
+         
+          echo "In process: $file"
+          if [[ $fileName == "Chart.yaml" ]]; then
+            yq eval $file >> /dev/null
+       
+            # extract version from Helm chart
+            updVer=$(yq '.version' $file)
+
+            baseDir=$PWD
+            cd $fileDir
+            cd ../workload-orchestration/
+
+            export updVer
+        
+            yq -i '.components[].properties.chart.version = env(updVer)' *-specs.json
+            yq -i '.metadata.version = env(updVer)' *-schema.yaml
+            yq -i '.metadata.version = env(updVer)' *-sol-template.yaml
+
+            cd $baseDir
+
+          fi
+        done
+
+    - name: Commit changes
+      uses: stefanzweifel/git-auto-commit-action@v5

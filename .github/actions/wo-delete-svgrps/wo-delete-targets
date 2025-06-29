@@ -1,0 +1,80 @@
+name: Delete WO Targets
+description: Create service groups for the site per site config
+inputs:
+  site:
+    description: Site name, e.g., austin, boston, etc.
+    required: true
+  rg:
+    description: used to provide the RG to be used
+    required: true
+runs:
+  using: "composite"
+  steps:
+  - name: Install Workload Orchestration Extension
+    uses: ./.github/actions/install-wo-extension
+
+  - name: source site info
+    id: siteinfo
+    uses: ./.github/actions/wo-get-site-info
+    with:
+      site: ${{ inputs.site }}
+      rg: ${{ inputs.rg }}
+
+  - name: delete service groups dynamically based on defined hierarchy levels
+    id: delete
+    shell: bash
+    run: |
+      wfrg=${{ steps.siteinfo.outputs.rg }}
+
+      delete_target() {
+        local target_name="$1"
+        local wfrg="$2"
+
+        echo "Check if target exists ... "
+        targetId=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query id --output tsv 2>/dev/null)
+        if [[ -z "$targetId" ]]; then
+          echo "Target $target_name does not exist in RG $wfrg. Skipping deletion."
+          return
+        fi
+
+        echo "Disassociating target $target_name from svcgrp..."
+        az rest --method delete --url "$targetId/providers/Microsoft.Relationships/serviceGroupMember/SGRelation?api-version=2023-09-01-preview" 
+
+        echo "Deleting target $target_name..."
+        az workload-orchestration target delete --resource-group "$wfrg" --name "$target_name" -y
+      }
+
+      # check is targets exist
+      tarfnd=$(az workload-orchestration target list -g $wfrg -o tsv)
+      if [[ -z "$tarfnd" ]]; then
+        echo "No targets in RG $wfrg. Skipping deletions"
+        exit 0
+      fi
+
+      numTar=$(yq ".target.${{ inputs.site }} | length" .pg/sites/${{ inputs.site }}/target.yaml)
+      if [[ -z "$numTar" || "$numTar" -eq 0 ]]; then
+        echo "No targets found"
+        exit 0
+      fi
+
+      
+      echo "Looping through $numTar targets..."
+      for ((i=0; i<numTar; i++)); do
+        target_name=$(yq -r ".target.${{ inputs.site }}[$i].name" .pg/sites/${{ inputs.site }}/target.yaml)
+        if [[ -z "$target_name" ]]; then
+          echo "target is null. exit"
+          exit 1
+        fi 
+
+        if [[ -z "$wfrg" ]]; then
+          echo "RG is not valid - $wfrg"
+          exit 1
+        fi
+
+        echo "target to be deleted: $target_name in RG $wfrg"
+
+        delete_target "$target_name" "$wfrg"
+      done
+  
+      echo "$numTar  targets deleted"
+      az workload-orchestration target list -g "$wfrg" -o table

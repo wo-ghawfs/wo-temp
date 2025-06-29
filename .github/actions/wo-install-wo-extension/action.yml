@@ -1,0 +1,18 @@
+name: 'Install Azure Workload Orchestration Extension'
+description: 'Installs the Azure CLI Workload Orchestration extension'
+
+inputs:
+  extension-file:
+    description: 'Path to the workload orchestration extension .whl file'
+    required: false
+    default: '.exts/workload_orchestration-1.1.8-py3-none-any.whl'
+
+runs:
+  using: composite
+  steps:
+    - name: Install Workload Orchestration Extension
+      shell: bash
+      run: |
+        az cloud update --endpoint-resource-manager "https://eastus2euap.management.azure.com"
+        az extension add -s ${{ inputs.extension-file }} -y
+        az extension list -o table

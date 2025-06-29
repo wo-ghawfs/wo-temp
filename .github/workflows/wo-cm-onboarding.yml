@@ -1,0 +1,351 @@
+name: cm-onboarding
+
+on:
+  push:
+    branches:
+      - main
+    paths: ['.pg/**/workload-orchestration/**']
+
+  workflow_dispatch:
+    inputs:
+      deploy_common:
+        type: choice
+        description: 'Choose what common resources to deploy'
+        default: none
+        options:
+        - none
+        - schema-only
+        - config-only
+        - all
+        required: true
+      action:
+        type: choice
+        description: Choose app resources to deploy
+        default: none
+        options:
+        - none
+        - create-schema
+        - create-soln-template
+        - all
+        required: true
+      apps:
+        type: string
+        description: 'Comma-separated list of apps to deploy (e.g., testapp1,testapp2)'
+        default: null
+
+permissions:
+  id-token: write # 
+  contents: write # for actions/checkout
+
+jobs:
+  detect-apps-to-deploy:
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ github.event_name == 'workflow_dispatch' && steps.app-list-dispatch.outputs.apps || steps.app-list.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check changed files
+        if: github.event_name == 'push'
+        id: changed-files
+        uses: ./.github/actions/wo-changed-files
+        with:
+          files: .pg/**/*
+      - name: Extract apps with changes
+        if: github.event_name == 'push'
+        id: app-list
+        run: |
+          # Get all changed files and extract unique app names
+          APPS=$(echo "${{ steps.changed-files.outputs.all_changed_files }}" | 
+                 grep -o '\.pg/apps/[^/]*/' | 
+                 sed 's/\.pg\/apps\///' | 
+                 sed 's/\///' | 
+                 grep -v '^common$' | 
+                 sort -u | 
+                 jq -R -s -c 'split("\n")[:-1]')
+          echo "apps=$APPS" >> $GITHUB_OUTPUT
+
+      - name: Extract and validate apps for deployment
+        if: github.event_name == 'workflow_dispatch'
+        id: app-list-dispatch
+        run: |
+          echo "Validating apps from input list..."
+          APPS_INPUT="${{ github.event.inputs.apps }}"
+          
+          # Handle empty or whitespace-only input
+          if [[ -z "${APPS_INPUT// }" ]]; then
+            echo "⚠️ Empty app list provided"
+            echo "apps=[]" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          VALID_APPS=()
+
+          # Process each app
+          IFS=',' read -ra APP_LIST <<< "$APPS_INPUT"
+          for app in "${APP_LIST[@]}"; do
+            # Trim whitespace
+            app=$(echo "$app" | xargs)
+            
+            # Validate app directory exists
+            if [[ -d ".pg/apps/$app" ]]; then
+              VALID_APPS+=("$app")
+              echo "✅ Validated app: $app"
+            else
+              echo "❌ Warning: Directory .pg/apps/$app does not exist, skipping"
+            fi
+          done
+
+          # Convert validated apps to JSON array
+          APPS=$(printf '%s\n' "${VALID_APPS[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          echo "apps=$APPS" >> $GITHUB_OUTPUT
+          echo "✅ Final app list: $APPS"
+
+  deploy-apps:
+    needs: detect-apps-to-deploy
+    if: ${{ needs.detect-apps-to-deploy.outputs.apps != '[]' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none') }}
+    runs-on: ubuntu-latest
+    env:
+      AZURE_RESOURCE_GROUP: 'cm-resources'
+      AZURE_LOCATION: 'eastus2'
+    strategy:
+      fail-fast: false
+      max-parallel: 4  # Limit to 4 concurrent jobs
+      matrix:
+        app_name: ${{ fromJson(needs.detect-apps-to-deploy.outputs.apps) }}
+    
+    steps:
+      - name: Azure Login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Source composite actions
+        uses: ./.github/actions/wo-utilities/
+        with:
+          utilities: "yq"
+
+      - name: Verify composite actions
+        run: |
+          pwd
+          yq --version
+      
+      - name: Install Workload Orchestration Extension
+        uses: ./.github/actions/wo-install-wo-extension
+
+      - name: Check changed files
+        if: github.event_name == 'push'
+        id: changed-files
+        uses: ./.github/actions/wo-changed-files
+        with:
+          files: .pg/**/*
+          
+      - name: Get files
+        id: get-files
+        run: |
+          BASE_PATH=".pg/apps/${{ matrix.app_name }}/workload-orchestration"
+          
+          # Find schema file
+          SCHEMA_FILE=$(find "$BASE_PATH" -name "*-schema.yaml" -type f)
+          if [[ -f "$SCHEMA_FILE" ]]; then
+            echo "schema_file=$SCHEMA_FILE" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Schema file not found in $BASE_PATH"
+          fi
+          
+          # Find solution template file
+          SOL_TEMP_FILE=$(find "$BASE_PATH" -name "*-sol-template.yaml" -type f)
+          if [[ -f "$SOL_TEMP_FILE" ]]; then
+            echo "sol_temp_file=$SOL_TEMP_FILE" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Solution template file not found in $BASE_PATH"
+          fi
+          
+          # Find specs file in same directory as solution template
+          SPECS_FILE=$(find "$BASE_PATH" -name "*-specs.json" -type f)
+          if [[ -f "$SPECS_FILE" ]]; then
+            echo "specs_file=$SPECS_FILE" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Specs file not found in $BASE_PATH"
+          fi
+          
+          # Find metadata file
+          METADATA_FILE=$(find "$BASE_PATH" -name "metadata.yaml" -type f)
+          if [[ -f "$METADATA_FILE" ]]; then
+            echo "metadata_file=$METADATA_FILE" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Metadata file not found in $BASE_PATH"
+          fi
+
+      - name: Set deployment flags
+        id: deployment-flags
+        run: |
+          # Initialize flags
+          CREATE_SCHEMA="false"
+          CREATE_TEMPLATE="false"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # For manual runs, use the action input
+            case "${{ github.event.inputs.action }}" in
+              "create-schema")
+                CREATE_SCHEMA="true"
+                ;;
+              "create-soln-template")
+                CREATE_TEMPLATE="true"
+                ;;
+              "all")
+                CREATE_SCHEMA="true"
+                CREATE_TEMPLATE="true"
+                ;;
+            esac
+          else
+            # For push events, check changed files
+            if [[ $(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -c "${{ steps.get-files.outputs.schema_file }}") -gt 0 ]]; then
+              CREATE_SCHEMA="true"
+            fi
+            if [[ $(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -E "${{ steps.get-files.outputs.sol_temp_file }}|${{ steps.get-files.outputs.specs_file }}|${{ steps.get-files.outputs.metadata_file }}") ]]; then
+              CREATE_TEMPLATE="true"
+            fi
+          fi
+
+          # Set outputs
+          echo "create_schema=$CREATE_SCHEMA" >> $GITHUB_OUTPUT
+          echo "create_template=$CREATE_TEMPLATE" >> $GITHUB_OUTPUT
+
+          # Echo final status using local variables
+          echo "Set flags: schema=$CREATE_SCHEMA, template=$CREATE_TEMPLATE"
+
+      - name: Create App Schema
+        if: steps.deployment-flags.outputs.create_schema == 'true'
+        uses: ./.github/actions/wo-create-schema
+        with:
+          app-name: ${{ matrix.app_name }}
+          azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+          location: ${{ env.AZURE_LOCATION }}
+          schema-file: ${{ steps.get-files.outputs.schema_file }}
+
+      - name: Create App Solution Template
+        if: steps.deployment-flags.outputs.create_template == 'true'
+        uses: ./.github/actions/wo-create-solution-template
+        with:
+          app-name: ${{ matrix.app_name }}
+          azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+          location: ${{ env.AZURE_LOCATION }}
+          template-file: ${{ steps.get-files.outputs.sol_temp_file }}
+          specification-file: ${{ steps.get-files.outputs.specs_file }}
+          metadata-file: ${{ steps.get-files.outputs.metadata_file }}
+
+  deploy-common-resources:
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.deploy_common != 'none' }}
+    runs-on: ubuntu-latest
+    env:
+      AZURE_RESOURCE_GROUP: 'cm-resources'
+      AZURE_LOCATION: 'eastus2'
+    steps:
+      - name: Azure Login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - uses: actions/checkout@v4
+
+      - name: Source composite actions
+        uses: ./.github/actions/wo-utilities/
+        with:
+          utilities: "yq"
+
+      - name: Install Workload Orchestration Extension
+        uses: ./.github/actions/wo-install-wo-extension
+
+      - name: Get files
+        id: get-files
+        run: |
+          # Verify schema file exists
+          SCHEMA_PATH=".pg/apps/common/common-schema.yaml"
+          if [[ -f "$SCHEMA_PATH" ]]; then
+            echo "schema_file=$SCHEMA_PATH" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Common schema file not found at $SCHEMA_PATH"
+          fi
+          
+          # Verify config template file exists
+          CONFIG_PATH=".pg/apps/common/common-config-template.yaml"
+          if [[ -f "$CONFIG_PATH" ]]; then
+            echo "config_file=$CONFIG_PATH" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Common config template file not found at $CONFIG_PATH"
+          fi
+        
+      - name: Check changed files
+        if: github.event_name == 'push'
+        id: changed-files
+        uses: ./.github/actions/wo-changed-files
+        with:
+          files: .pg/apps/common/*
+
+      - name: Set deployment flags
+        id: deployment-flags
+        run: |
+          # Initialize flags
+          DEPLOY_COMMON_SCHEMA="false"
+          DEPLOY_COMMON_CONFIG="false"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # For manual runs, check deploy_common input
+            case "${{ github.event.inputs.deploy_common }}" in
+              "schema-only"|"all")
+                DEPLOY_COMMON_SCHEMA="true"
+                ;;
+            esac
+            case "${{ github.event.inputs.deploy_common }}" in
+              "config-only"|"all")
+                DEPLOY_COMMON_CONFIG="true"
+                ;;
+            esac
+          else
+            # For push events, check changed files
+            if [[ $(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -c ".pg/apps/common/common-schema.yaml") -gt 0 ]]; then
+              DEPLOY_COMMON_SCHEMA="true"
+            fi
+            if [[ $(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -c ".pg/apps/common/common-config-template.yaml") -gt 0 ]]; then
+              DEPLOY_COMMON_CONFIG="true"
+            fi
+          fi
+
+          # Set outputs
+          echo "deploy_schema=$DEPLOY_COMMON_SCHEMA" >> $GITHUB_OUTPUT
+          echo "deploy_config=$DEPLOY_COMMON_CONFIG" >> $GITHUB_OUTPUT
+
+          # Echo final status using local variables
+          echo "Set flags: schema=$DEPLOY_COMMON_SCHEMA, template=$DEPLOY_COMMON_CONFIG"
+
+      - name: Create Common Schema
+        if: steps.deployment-flags.outputs.deploy_schema == 'true'
+        uses: ./.github/actions/wo-create-schema
+        with:
+          app-name: common
+          azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+          location: ${{ env.AZURE_LOCATION }}
+          schema-file: ${{ steps.get-files.outputs.schema_file }}
+
+      - name: Create Common Config Template
+        if: steps.deployment-flags.outputs.deploy_config == 'true'
+        uses: ./.github/actions/wo-create-config-template
+        with:
+          azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+          config-template-file: ${{ steps.get-files.outputs.config_file }}
+          description: "Common configuration template for shared settings"
+          location: ${{ env.AZURE_LOCATION }}

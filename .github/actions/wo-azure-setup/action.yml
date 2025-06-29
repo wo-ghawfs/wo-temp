@@ -1,0 +1,33 @@
+name: 'WO Azure Setup'
+description: 'Log in to Azure using OIDC, install cli'
+inputs:
+  client-id:
+    required: true
+    description: 'Azure Client ID'
+  tenant-id:
+    required: true
+    description: 'Azure Tenant ID'
+  subscription-id:
+    required: true
+    description: 'Azure Subscription ID'
+  azcliversion:
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Azure Login with OIDC
+      uses: azure/login@v1
+      with:
+        client-id: ${{ inputs.client-id }}
+        tenant-id: ${{ inputs.tenant-id }}
+        subscription-id: ${{ inputs.subscription-id }}
+
+    - name: Install Azure CLI
+      uses: azure/cli@v2
+      with:
+        #azcliversion: ${{ inputs.azcliversion }}
+        azcliversion: "2.73.0"
+        inlineScript: |
+          echo "az cli setup with latest version"
+          # az cloud update --endpoint-resource-manager "https://eastus2euap.management.azure.com"
+          az cloud update --endpoint-resource-manager "https://management.azure.com"

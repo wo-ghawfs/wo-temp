@@ -1,0 +1,70 @@
+name: Check if SGs are associated to any targets
+description: check for SG associated in targets
+inputs:
+  site:
+    description: Site name, e.g., austin, boston, etc.
+    required: true
+  rg:
+    description: used to provide the RG to be used
+    required: true
+outputs:
+  svcfound:
+    description: returns true is even one target is associated with SG
+    value: ${{ steps.checksvctar.outputs.svcfound }}
+runs:
+  using: "composite"
+  steps:
+  - name: source site info
+    id: siteinfo
+    uses: ./.github/actions/wo-get-site-info
+    with:
+      site: ${{ inputs.site }}
+      rg: ${{ inputs.rg }}
+
+  - name: check for SG association
+    id: checksvctar
+    shell: bash
+    run: |
+      wfrg=${{ steps.siteinfo.outputs.rg }}
+      sg_assoc="false"
+      echo "svcfound=false" >> $GITHUB_OUTPUT
+
+      check_target() {
+        local target_name="$1"
+        local wfrg="$2"
+        local svcfnd="false"
+
+        targetId=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query id --output tsv 2>/dev/null)
+        if [[ -z "$targetId" ]]; then
+          echo "Target $target_name does not exist in RG $wfrg. Skipping deletion."
+          return
+        fi
+
+        echo "Finding svcgrp association with $target_name ..."
+        svcfnd=$(az rest --method get --url "$targetId/providers/Microsoft.Relationships/serviceGroupMember/SGRelation?api-version=2023-09-01-preview" --query id -o tsv)
+        if [[ "$svcfnd" != "null" ]]; then
+          sg_assoc="true"
+        fi   
+      }
+
+      numTar=$(yq ".target.${{ inputs.site }} | length" .pg/sites/${{ inputs.site }}/target.yaml)
+      if [[ -z "$numTar" || "$numTar" -eq 0 ]]; then
+        echo "No targets found"
+        exit 0
+      fi
+
+      echo "Looping through $numTar targets..."
+      for ((i=0; i<numTar; i++)); do
+        target_name=$(yq -r ".target.${{ inputs.site }}[$i].name" .pg/sites/${{ inputs.site }}/target.yaml)
+
+        check_target "$target_name" "$wfrg"
+      done
+     
+      echo "svcfound=$sg_assoc" >> $GITHUB_OUTPUT
+      echo "All targets checked"
+      if [[ $sg_assoc == "true" ]]; then
+        echo "Atleast one SG associated target found. Cannot delete Service Groups. Skipping"
+      else
+        echo "No target-SG association found. Deleting Service Groups ..."
+      fi 
+      
