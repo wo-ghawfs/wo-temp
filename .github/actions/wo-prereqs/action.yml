@@ -6,12 +6,12 @@ runs:
     - name: install extensions
       shell: bash
       run: |
-        echo "setting up extensions"
+        echo "INSTALLING Extensions ..."
         az extension add --name customlocation
         az extension add --name k8s-extension
         az extension add --name connectedk8s
 
-        echo "registering providers"
+        echo "REGISTERING Providers"
         az provider register --namespace Microsoft.Edge
         az provider register --namespace Microsoft.ContainerService && az provider register --namespace Microsoft.ExtendedLocation
         az provider register --namespace Microsoft.KubernetesConfiguration && az provider register --namespace Microsoft.Kubernetes
@@ -20,3 +20,4 @@ runs:
         echo
         echo "az version "
         az version
+        echo

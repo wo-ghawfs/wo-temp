@@ -13,4 +13,8 @@ runs:
     - name: Install Workload Orchestration Extension
       shell: bash
       run: |
+        echo "INSTALLING CLI Extension workload-orchestration ..."
+        echo
         az extension add --name workload-orchestration
+        az workload-orchestration -h
+        echo
