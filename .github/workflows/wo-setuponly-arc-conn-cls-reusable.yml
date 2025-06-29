@@ -59,29 +59,28 @@ jobs:
     - name: Setup resource group
       id: rgsetup
       run: |
-        # az group create --location ${{ steps.siteinfo.outputs.siteLoc }}  --name ${{ steps.siteinfo.outputs.siteRG }}
         az group create --location ${{ steps.siteinfo.outputs.siteLoc }}  --name ${{ steps.siteinfo.outputs.rg }}
 
     - name: Check for wo readiness
       id: check-wo-ready
-      uses: ./.github/actions/wo-check-aks-cluster
+      # uses: ./.github/actions/wo-check-aks-cluster
+      uses: ./.github/actions/wo-check-arc-conn-cluster
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
-        # rg: ${{ steps.siteinfo.outputs.rg }}
         siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
 
-    - name: Create w-o ready cluster
-      if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
-      id: aksClsWo
-      uses: ./.github/actions/wo-setup-aks-cluster
-      with:
-        site: ${{ inputs.sites }}
-        rg: ${{ inputs.rg }}
-        akscls: ${{ steps.check-wo-ready.outputs.akscls }}
-        akscon: ${{ steps.check-wo-ready.outputs.akscon }}
-        cusloc: ${{ steps.check-wo-ready.outputs.cusloc }}
-        woextn: ${{ steps.check-wo-ready.outputs.woextn }}
-        aiocrt: ${{ steps.check-wo-ready.outputs.aiocrt }}
+    #- name: Create w-o ready cluster
+    #  if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
+    #  id: aksClsWo
+    #  uses: ./.github/actions/wo-setup-aks-cluster
+    #  with:
+    #    site: ${{ inputs.sites }}
+    #    rg: ${{ inputs.rg }}
+    #    akscls: ${{ steps.check-wo-ready.outputs.akscls }}
+    #    akscon: ${{ steps.check-wo-ready.outputs.akscon }}
+    #    cusloc: ${{ steps.check-wo-ready.outputs.cusloc }}
+    #    woextn: ${{ steps.check-wo-ready.outputs.woextn }}
+    #    aiocrt: ${{ steps.check-wo-ready.outputs.aiocrt }}
 
