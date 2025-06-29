@@ -41,12 +41,10 @@ on:
         default: none
         options:
         - none
-        - austin 
-        - boston
-        - chicago
-        - dallas
-        - eugene
-        - frisco
+        - albany 
+        - bethel
+        - canton
+        - denver
         required: true
       commands:
         type: string
@@ -55,7 +53,7 @@ on:
         required: true
       usesiterg:
         type: string
-        description: TESTING siteRG override
+        description: TESTING RG OVERRIDE
         default: true
 
 permissions:
