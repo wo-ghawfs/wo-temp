@@ -53,7 +53,7 @@ runs:
 
 
         echo "CHECK IF THIS IS A CONNECTED CLUSTER"
-        aksctd=$(az connectedk8s show --resource-group "${{ inputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+        aksctd=$(az connectedk8s show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
         # aksctd=$(az rest --method get \
         #         --resource https://management.azure.com \
         #         --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ inputs.siteClsName }}?api-version=2024-07-01-preview" 2>&1) || true
@@ -70,7 +70,7 @@ runs:
         fi
 
         echo "CHECK IF CUSTOMLOCATION IS ENABLED ON CONNECTED CLUSTER"
-        concls=$(az customlocation show --resource-group "${{ inputs.rg }}" --name "${{ steps.siteinfo.outputs.sitecusLocName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+        concls=$(az customlocation show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.sitecusLocName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
         # concls=$(az rest --method GET \
         #        --resource https://management.azure.com \
         #        --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.ExtendedLocation/customLocations/${{ steps.siteinfo.outputs.sitecusLocName }}?api-version=2021-08-15" 2>&1) || true
