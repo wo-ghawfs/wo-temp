@@ -53,6 +53,7 @@ runs:
 
 
         echo "CHECK IF THIS IS A CONNECTED CLUSTER"
+        echo "usingrg: ${{ steps.siteinfo.outputs.rg }} and inputrg: ${{ inputs.rg }}"
         aksctd=$(az connectedk8s show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
         # aksctd=$(az rest --method get \
         #         --resource https://management.azure.com \
