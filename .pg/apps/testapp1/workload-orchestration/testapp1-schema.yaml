@@ -1,6 +1,6 @@
 metadata:
   name: testapp1-schema
-  version: 8.8.8
+  version: 1.0.1
 rules:
   configs:
     AppName:

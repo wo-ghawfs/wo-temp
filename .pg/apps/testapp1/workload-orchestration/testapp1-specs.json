@@ -6,7 +6,7 @@
       "properties": {
         "chart": {
           "repo": "contosocm.azurecr.io/helm/csad-featurizer",
-          "version": "7.7.7",
+          "version": "1.0.1",
           "wait": true,
           "timeout": "11m"
         }
