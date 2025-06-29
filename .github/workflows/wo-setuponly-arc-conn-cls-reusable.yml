@@ -42,19 +42,12 @@ jobs:
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         azcliversion: "2.73.0"
 
-    - name: Setup common resources
-      uses: ./.github/actions/setup-common
-
     - name: Source site info
       id: siteinfo
       uses: ./.github/actions/wo-get-site-info
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
-
-    - name: Install prereq extensions
-      id: wo-prereqs
-      uses: ./.github/actions/wo-prereqs
 
     - name: Setup resource group
       id: rgsetup

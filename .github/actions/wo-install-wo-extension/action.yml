@@ -13,6 +13,4 @@ runs:
     - name: Install Workload Orchestration Extension
       shell: bash
       run: |
-        az cloud update --endpoint-resource-manager "https://eastus2euap.management.azure.com"
-        az extension add -s ${{ inputs.extension-file }} -y
-        az extension list -o table
+        az extension add --name workload-orchestration

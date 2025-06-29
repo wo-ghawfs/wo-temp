@@ -1,5 +1,5 @@
 name: 'WO Azure Setup'
-description: 'Log in to Azure using OIDC, install cli'
+description: 'Log in to Azure using OIDC, install cli and setup endpoint'
 inputs:
   client-id:
     required: true
@@ -29,5 +29,8 @@ runs:
         azcliversion: "2.73.0"
         inlineScript: |
           echo "az cli setup with latest version"
-          # az cloud update --endpoint-resource-manager "https://eastus2euap.management.azure.com"
           az cloud update --endpoint-resource-manager "https://management.azure.com"
+
+    - name: Install prerequite extensions
+      id: wo-prereqs
+      uses: ./.github/actions/wo-prereqs

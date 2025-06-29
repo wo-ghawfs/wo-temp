@@ -55,9 +55,11 @@ runs:
         echo "CHECK IF THIS IS A CONNECTED CLUSTER"
         echo "usingrg: ${{ steps.siteinfo.outputs.rg }} and inputrg: ${{ inputs.rg }}"
         aksctd=$(az connectedk8s show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+
         # aksctd=$(az rest --method get \
         #         --resource https://management.azure.com \
         #         --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ inputs.siteClsName }}?api-version=2024-07-01-preview" 2>&1) || true
+
         exit_code=$?
         echo "exit code: $exit_code"
         echo "aksctd: $aksctd"
@@ -72,9 +74,11 @@ runs:
 
         echo "CHECK IF CUSTOMLOCATION IS ENABLED ON CONNECTED CLUSTER"
         concls=$(az customlocation show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.sitecusLocName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+
         # concls=$(az rest --method GET \
         #        --resource https://management.azure.com \
         #        --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.ExtendedLocation/customLocations/${{ steps.siteinfo.outputs.sitecusLocName }}?api-version=2021-08-15" 2>&1) || true
+
         exit_code=$?
         echo "exit code: $exit_code"
         echo "concls: $concls"
@@ -122,14 +126,12 @@ runs:
           echo "woextn=true" >> "$GITHUB_OUTPUT"
           echo "aiocrt=true" >> "$GITHUB_OUTPUT"
 
-          # cuslocid=$(yq '.id' <<< $akscon)
           cuslocid=$(echo "$concls" | yq '.id')
           echo "cuslocid: $cuslocid"
           # good to do
           yq -i ".name = \"$cuslocid\"" .pg/sites/${{ inputs.site }}/custom-location.json
           echo "updated cloc: .pg/sites/${{ inputs.site }}/custom-location.json"
 
-          echo "cluster is WO ready"
         else
           echo "akscls=$akscls" >> $GITHUB_OUTPUT       
           echo "akscon=$akscon" >> $GITHUB_OUTPUT       
@@ -137,8 +139,6 @@ runs:
           echo "woextn=$woextn" >> $GITHUB_OUTPUT
           echo "aiocrt=$aiocrt" >> $GITHUB_OUTPUT
           echo "woready=$woready" >> $GITHUB_OUTPUT
-
-          echo "cluster is NOT ready"
         fi
 
         echo 
@@ -148,7 +148,9 @@ runs:
         echo "cusloc:    $cusloc"       
         echo "woextn:    $woextn"
         echo "aiocrt:    $aiocrt"
-        echo "WOREADY:   $woready"
+        echo
+        echo "----------------------------"
+        echo "cluster WO readiness: $woready"
 
 
 
