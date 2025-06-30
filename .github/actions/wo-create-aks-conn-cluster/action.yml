@@ -26,7 +26,8 @@ runs:
 
         akscls="false"
         echo "check if cluster already exists "
-        aksName=$(az aks show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name 2>&1) || true
+        aksName=$(az aks show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name 2>&1) || true
+        echo "aksName is : $aksName"
 
         # exit_code=$?
         # echo "exit code: $exit_code"
