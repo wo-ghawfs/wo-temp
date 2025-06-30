@@ -65,11 +65,18 @@ runs:
         contextId=$(az workload-orchestration context show -g ${{ steps.siteinfo.outputs.ctxRG }} -n ${{ steps.siteinfo.outputs.ctxName }} \
                                                 --subscription ${{ steps.siteinfo.outputs.ctxSub }} --query id)
 
+        # get customlocation
+        # --extended-location ".pg/sites/${{ inputs.site }}/custom-location.json" \
+        concls=$(az customlocation show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.sitecusLocName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name -o tsv 2>&1)
+        echo "extended location: $concls"
+        echo
+
+
         # Create target
         az workload-orchestration target create --resource-group $wfrg --location $wfloc --name $target_name --display-name "$target_name" \
                                  --hierarchy-level "$target_level" --capabilities "$target_caps" --description "$target_name-$target_level" \
                                  --solution-scope "$wfrg" --target-specification '@.pg/sites/${{ inputs.site }}/targetspecs.json' \
-                                 --extended-location ".pg/sites/${{ inputs.site }}/custom-location.json" \
+                                 --extended-location "$concls" \
                                  --context-id "/subscriptions/973d15c6-6c57-447e-b9c6-6d79b5b784ab/resourceGroups/Mehoopany/providers/Microsoft.Edge/contexts/Mehoopany-Context"
 
         #link target to svcgrp
