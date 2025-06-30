@@ -89,32 +89,34 @@ runs:
           akscon="true"
           akscls="true"
           cusloc="true"
-
-          echo "check for aio-certmgr extension ... "
-          aio=$(az rest --method GET \
-               --resource https://management.azure.com \
-               --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/aio-certmgr?api-version=2023-05-01" --query name -o tsv 2>&1) || true
-          if [[ "$aio" == "aio-certmgr" ]]; then 
-            echo " ---> aiocert extension exists"
-            aiocrt="true"
-          fi
-
-          echo "check for workload-orchestration extension ... "
-          wo=$(az rest --method GET \
-               --resource https://management.azure.com \
-               --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/workloadorchestration?api-version=2023-05-01" --query name -o tsv 2>&1) || true
-          if [[ "$wo" == "workloadorchestration" ]]; then 
-            echo " ---> wo extension exists"
-            woextn="true"
-          fi
         else
           echo " ---> CUSTOMLOCATION DOES NOT EXIST"
+          akscon="true"
+          akscls="true"
           cusloc="false"
-          aiocrt="false"
-          woextn="false"
         fi
 
-    
+        echo "check for aio-certmgr extension ... "
+        aio=$(az rest --method GET \
+             --resource https://management.azure.com \
+             --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/aio-certmgr?api-version=2023-05-01" --query name -o tsv 2>&1) || true
+        if [[ "$aio" == "aio-certmgr" ]]; then 
+          echo " ---> aiocert extension exists"
+          aiocrt="true"
+        else
+          echo " ---> missing extension: aio-certmgr "
+        fi
+
+        echo "check for workload-orchestration extension ... "
+        wo=$(az rest --method GET \
+             --resource https://management.azure.com \
+             --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/workloadorchestration?api-version=2023-05-01" --query name -o tsv 2>&1) || true
+        if [[ "$wo" == "workloadorchestration" ]]; then 
+          echo " ---> wo extension exists"
+          woextn="true"
+        else
+          echo " ---> missing extension: workloadorchestration "
+        fi
 
         # concls=$(az rest --method GET \
         #        --resource https://management.azure.com \
@@ -179,7 +181,7 @@ runs:
           echo "woready=$woready" >> $GITHUB_OUTPUT
         fi
 
-        echo 
+        echo " " 
         echo "-- current state of readiness --"
         echo "Cluster present  :    $akscls"       
         echo "ConnectedCluster :    $akscon"       
