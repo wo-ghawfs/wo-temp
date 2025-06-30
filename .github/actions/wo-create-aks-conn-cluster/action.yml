@@ -1,0 +1,81 @@
+name: Create aks connected cluster 
+description: Create a workload-orchestration ready AKS cluster
+inputs:
+  site:
+    description: Site name, e.g., austin, boston, etc.
+    required: true
+  rg:
+    description: RG to be used for AKS cluster
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+
+    - name: source site info
+      id: siteinfo
+      uses: ./.github/actions/wo-get-site-info
+      with:
+        site: ${{ inputs.site }}
+        rg: ${{ inputs.rg }}
+
+    - name: create aks cluster
+      id: createaks     
+      shell: bash
+      run: |
+
+        echo "check if cluster already exists "
+        aksName=$(az aks show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+
+        exit_code=$?
+        echo "exit code: $exit_code"
+        echo "aksName: $aksName"
+
+        if [[ $exit_code -eq 0 ]] && echo "$aksName" | grep -Eq "ResourceNotFound|InvalidApiVersionParameter|No HTTP|InvalidAPI"; then
+          echo "cluster does not exist.creating ... "
+          akscls="false"
+          akscon="false"
+        else
+          echo "CLUSTER already exists"
+          echo
+          exit 0
+        fi
+
+    - name: create cluster identity
+      if: ${{ inputs.akscls == 'false' }}
+      id: clsid
+      shell: bash
+      run: |
+        echo "CREATE AKS CLUSTER IDENTITY"
+        az identity create --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsId }} 
+        echo "clusterIdentity=$(az identity show --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsId }} --query id --output tsv)" >> $GITHUB_OUTPUT
+
+    - name: Create AKS cluster
+      if: ${{ inputs.akscls == 'false' }}
+      id: createaks
+      shell: bash
+      run: |
+        echo " "
+        echo "CREATE AKS CLUSTER "
+        az aks create --resource-group ${{ steps.siteinfo.outputs.rg }} --location ${{ steps.siteinfo.outputs.siteLoc }}  \
+                      --name ${{ steps.siteinfo.outputs.siteClsName }} --node-count 2 --node-vm-size Standard_D2s_v5 --assign-identity ${{ steps.clsid.outputs.clusterIdentity }} --generate-ssh-keys
+
+    - name: Get AKS Credentials
+      uses: Azure/aks-set-context@v3
+      with:
+        resource-group: ${{ steps.siteinfo.outputs.rg }}
+        cluster-name: ${{ steps.siteinfo.outputs.siteClsName }}
+
+    - name: get cluster context and arc connect cluster
+      id: connectedcluster
+      shell: bash
+      run: |
+        echo " "
+        echo "ARC-CONNECTED AKS CLUSTER "
+        kubectl config current-context
+        az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }}
+        kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
+        az connectedk8s connect --resource-group ${{ steps.siteinfo.outputs.rg }} --location "${{ steps.siteinfo.outputs.siteLoc }}" --name ${{ steps.siteinfo.outputs.siteClsName }}
+        az connectedk8s enable-features --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --features cluster-connect custom-locations
+        echo
+        echo "arc connected aks cluster successfully created"
