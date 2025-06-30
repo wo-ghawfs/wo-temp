@@ -11,7 +11,7 @@ runs:
   using: "composite"
   steps:
   - name: Install Workload Orchestration Extension
-    uses: ./.github/actions/install-wo-extension
+    uses: ./.github/actions/wo-install-wo-extension
 
   - name: delete service groups dynamically based on defined hierarchy levels
     id: delete
