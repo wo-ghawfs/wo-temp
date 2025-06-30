@@ -1,4 +1,4 @@
-# Resusable workflow to wo-ready a given cluster
+# Resusable workflow to create an AKS cluster, make it WO ready
 # After verifying cluster connectivity, the workflow
 # will install all the extensions and enable CL
 

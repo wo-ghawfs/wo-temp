@@ -1,5 +1,5 @@
-name: Check if this is a WO ready cluster 
-description: Create a workload-orchestration ready AKS cluster
+name:  wo-check-arc-conn-cluster
+description: check if this cluster is WO ready
 inputs:
   site:
     description: site used for cluster
@@ -44,7 +44,7 @@ runs:
       id: akswoready
       shell: bash
       run: |
-        akscls="false"
+        akscls="true"
         akscon="false"
         cusloc="false"
         aiocrt="false"
@@ -54,48 +54,47 @@ runs:
 
         echo "CHECK IF THIS IS A CONNECTED CLUSTER"
         echo "usingrg: ${{ steps.siteinfo.outputs.rg }} and inputrg: ${{ inputs.rg }}"
-        aksctd=$(az connectedk8s show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+        aksctd=$(az connectedk8s show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name -o tsv 2>&1) || true
+
+        if [[ "$aksctd" == "${{ inputs.siteClsName }}" ]]; then
+          echo "CONNECTED CLUSTER verified: ${{ inputs.siteClsName }}"
+          akscon="true"
+          akscls="true"
+        else
+          echo "CONNECTED CLUSTER DOES NOT EXIST"
+          akscon="false"
+        fi
 
         # aksctd=$(az rest --method get \
         #         --resource https://management.azure.com \
         #         --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ inputs.siteClsName }}?api-version=2024-07-01-preview" 2>&1) || true
 
-        exit_code=$?
-        echo "exit code: $exit_code"
-        echo "aksctd: $aksctd"
-        if [[ $exit_code -ne 0 ]] || echo "$aksName" | grep -Eq "ResourceNotFound|InvalidApiVersionParameter|No HTTP"; then
-          echo "CONNECTED CLUSTER DOES NOT EXIST"
-          akscon="false"
-        else
-          echo "CONNECTED CLUSTER verified: ${{ inputs.siteClsName }}"
-          akscon="true"
-          akscls="true"
-        fi
+        # exit_code=$?
+        # echo "exit code: $exit_code"
+        # echo "aksctd: $aksctd"
+        # if [[ $exit_code -ne 0 ]] || echo "$aksName" | grep -Eq "ResourceNotFound|InvalidApiVersionParameter|No HTTP"; then
+        #   echo "CONNECTED CLUSTER DOES NOT EXIST"
+        #   akscon="false"
+        # else
+        #   echo "CONNECTED CLUSTER verified: ${{ inputs.siteClsName }}"
+        #   akscon="true"
+        #   akscls="true"
+        # fi
 
         echo "CHECK IF CUSTOMLOCATION IS ENABLED ON CONNECTED CLUSTER"
-        concls=$(az customlocation show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.sitecusLocName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+        concls=$(az customlocation show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.sitecusLocName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name -o tsv 2>&1) || true
 
-        # concls=$(az rest --method GET \
-        #        --resource https://management.azure.com \
-        #        --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.ExtendedLocation/customLocations/${{ steps.siteinfo.outputs.sitecusLocName }}?api-version=2021-08-15" 2>&1) || true
-
-        exit_code=$?
-        echo "exit code: $exit_code"
-        echo "concls: $concls"
-        if [[ $exit_code -eq 0 ]] && echo "$concls" | grep -Eq "ResourceNotFound|InvalidApiVersionParameter|No HTTP|InvalidAPI|ERROR"; then
-          echo "CUSTOMLOCATION DOES NOT EXIST"
-          cusloc="false"
-          aiocrt="false"
-          woextn="false"
-        else
-          echo 
-          echo "CUSTOMLOCATION already enabled on CONNECTED CLUSTER" 
+        if [[ "$concls" == "${{ steps.siteinfo.outputs.sitecusLocName }}" ]]; then
+          echo "CUSTOMLOCATION verified: ${{ steps.siteinfo.outputs.sitecusLocName }}"
+          akscon="true"
+          akscls="true"
           cusloc="true"
 
           echo "dumping concls:"
           echo "$concls"
           echo 
 
+          echo "check for aio-certmgr extension ... "
           aio=$(az rest --method GET \
                --resource https://management.azure.com \
                --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/aio-certmgr?api-version=2023-05-01" --query name -o tsv 2>&1) || true
@@ -104,6 +103,7 @@ runs:
             aiocrt="true"
           fi
 
+          echo "check for workload-orchestration extension ... "
           wo=$(az rest --method GET \
                --resource https://management.azure.com \
                --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/workloadorchestration?api-version=2023-05-01" --query name -o tsv 2>&1) || true
@@ -111,8 +111,52 @@ runs:
             echo "wo extension exists"
             woextn="true"
           fi
-
+        else
+          echo "CUSTOMLOCATION DOES NOT EXIST"
+          cusloc="false"
+          aiocrt="false"
+          woextn="false"
         fi
+
+    
+
+        # concls=$(az rest --method GET \
+        #        --resource https://management.azure.com \
+        #        --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.ExtendedLocation/customLocations/${{ steps.siteinfo.outputs.sitecusLocName }}?api-version=2021-08-15" 2>&1) || true
+
+        # exit_code=$?
+        # echo "exit code: $exit_code"
+        # echo "concls: $concls"
+        # if [[ $exit_code -eq 0 ]] && echo "$concls" | grep -Eq "ResourceNotFound|InvalidApiVersionParameter|No HTTP|InvalidAPI|ERROR"; then
+        #   echo "CUSTOMLOCATION DOES NOT EXIST"
+        #   cusloc="false"
+        #   aiocrt="false"
+        #   woextn="false"
+        # else
+        #   echo 
+        #   echo "CUSTOMLOCATION already enabled on CONNECTED CLUSTER" 
+        #   cusloc="true"
+
+        #   echo "dumping concls:"
+        #   echo "$concls"
+        #   echo 
+
+        #   aio=$(az rest --method GET \
+        #        --resource https://management.azure.com \
+        #        --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/aio-certmgr?api-version=2023-05-01" --query name -o tsv 2>&1) || true
+        #   if [[ "$aio" == "aio-certmgr" ]]; then 
+        #     echo "aiocert extension exists"
+        #     aiocrt="true"
+        #   fi
+
+        #   wo=$(az rest --method GET \
+        #        --resource https://management.azure.com \
+        #        --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/workloadorchestration?api-version=2023-05-01" --query name -o tsv 2>&1) || true
+        #   if [[ "$wo" == "workloadorchestration" ]]; then 
+        #     echo "wo extension exists"
+        #     woextn="true"
+        #   fi
+        # fi
        
         echo "check result: woextn: $woextn aio: $aiocrt cusloc: $cusloc akscon: $akscon akscls: $akscls woready: $woready"
 
