@@ -56,7 +56,7 @@ runs:
         echo "INSTALL workload orchestration extension"
         az k8s-extension create --resource-group ${{ steps.siteinfo.outputs.rg }} --cluster-name ${{ steps.siteinfo.outputs.siteClsName }} \
                                 --cluster-type connectedClusters --name "workloadorchestration" --extension-type Microsoft.workloadorchestration --scope cluster \
-                                --release-train dev --version ${{ steps.siteinfo.outputs.extnVer }} --auto-upgrade false --config redis.persistentVolume.storageClass="default" \
+                                --release-train stable --version ${{ steps.siteinfo.outputs.extnVer }} --auto-upgrade false --config redis.persistentVolume.storageClass="default" \
                                 --config redis.persistentVolume.size=20Gi
 
     - name: get cluster and wo extension details

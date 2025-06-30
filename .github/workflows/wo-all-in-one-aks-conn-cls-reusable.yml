@@ -1,8 +1,9 @@
 # Resusable workflow to wo-ready a given cluster
 # After verifying cluster connectivity, the workflow
 # will install all the extensions and enable CL
+# Additionally, will enable SvGrps and deplot targets
 
-name: wo-ready-aks-conn-cls (Reusable)
+name: wo-ready-cls-all-in-one (Reusable)
 
 on:
   workflow_call:
@@ -23,7 +24,7 @@ on:
 
 jobs:
 
-  wo-all-in-one-aks-woready-cls:
+  wo-ready-cls-all-in-one:
     env:
       site: ${{ inputs.site }}
       rg: ${{ inputs.rg }}
@@ -42,6 +43,9 @@ jobs:
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         azcliversion: "2.73.0"
 
+    - name: Setup common resources
+      uses: ./.github/actions/setup-common
+
     - name: Source site info
       id: siteinfo
       uses: ./.github/actions/wo-get-site-info
@@ -49,30 +53,29 @@ jobs:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
 
+    - name: Install prereq extensions
+      id: wo-prereqs
+      uses: ./.github/actions/wo-prereqs
+
     - name: Setup resource group
       id: rgsetup
       run: |
+        # az group create --location ${{ steps.siteinfo.outputs.siteLoc }}  --name ${{ steps.siteinfo.outputs.siteRG }}
         az group create --location ${{ steps.siteinfo.outputs.siteLoc }}  --name ${{ steps.siteinfo.outputs.rg }}
 
-    - name: Create connected aks cluster
-      id: create-aks-conn-cluster
-      uses: ./.github/actions/wo-create-aks-conn-cluster
-      with:
-        site: ${{ inputs.site }}
-        rg: ${{ inputs.rg }}
-
-    - name: Check for WO readiness
+    - name: Check for wo readiness
       id: check-wo-ready
-      uses: ./.github/actions/wo-check-woready-cluster
+      uses: ./.github/actions/wo-check-aks-cluster
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
         siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
+
     - name: Create w-o ready cluster
       if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
       id: aksClsWo
-      uses: ./.github/actions/wo-setup-woready-cluster
+      uses: ./.github/actions/wo-setup-aks-cluster
       with:
         site: ${{ inputs.sites }}
         rg: ${{ inputs.rg }}
@@ -82,10 +85,10 @@ jobs:
         woextn: ${{ steps.check-wo-ready.outputs.woextn }}
         aiocrt: ${{ steps.check-wo-ready.outputs.aiocrt }}
 
-    # - name: Create service groups
-    #   uses: ./.github/actions/wo-setup-svgrps
-    #   with:
-    #     site: ${{ inputs.site }}
+    - name: Create service groups
+      uses: ./.github/actions/wo-setup-svgrps
+      with:
+        site: ${{ inputs.site }}
 
     # - name: Create targets
     #  uses: ./.github/actions/wo-setup-targets
@@ -105,7 +108,7 @@ jobs:
     #     site: ${{ inputs.sites }}
     #     rg: ${{ inputs.rg }}
 
-    # - name: delete service groups
-    #   uses: ./.github/actions/wo-delete-svgrps
-    #   with:
-    #     site: ${{ inputs.site }}
+    - name: delete service groups
+      uses: ./.github/actions/wo-delete-svgrps
+      with:
+        site: ${{ inputs.site }}

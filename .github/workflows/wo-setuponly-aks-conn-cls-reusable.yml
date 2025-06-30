@@ -63,7 +63,7 @@ jobs:
 
     - name: Check for WO readiness
       id: check-wo-ready
-      uses: ./.github/actions/wo-check-arc-conn-cluster
+      uses: ./.github/actions/wo-check-woready-cluster
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
