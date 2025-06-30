@@ -42,10 +42,9 @@ runs:
         #   exit 0
         # fi
 
-        if [[ "$aksName" == "${{ inputs.siteClsName }}" ]]; then
-          echo "cluster exists. nothing to so"
+        if [[ "$aksName" == "${{ steps.siteinfo.outputs.siteClsName }}" ]]; then
+          echo " cluster $aksName already exists. nothing to do."
           akscls="true"
-          exit 0 
         fi
 
         echo "akscls=$akscls" >> $GITHUB_OUTPUT
