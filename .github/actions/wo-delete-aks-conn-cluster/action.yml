@@ -22,7 +22,7 @@ runs:
       id: deletecluster
       shell: bash
       run: |
-        echo " "
+        echo
         echo "Delete cluster: ${{ steps.siteinfo.outputs.siteClsName }} site: ${{ inputs.site }} rg: ${{ steps.siteinfo.outputs.rg }}"
 
         aksName=$(az aks show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name -o tsv 2>&1) || true
@@ -34,5 +34,5 @@ runs:
           az aks delete --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" -y
 
           echo "Delete cluster-identity"
-          az identity delete --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsId }}
+          az identity delete --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsId }}"
         fi
