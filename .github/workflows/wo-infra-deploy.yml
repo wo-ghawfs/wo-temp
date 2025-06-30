@@ -67,23 +67,23 @@ permissions:
 
 jobs:
 
-  # action-validate:
-  #   runs-on: ubuntu-latest
+  action-validate:
+    runs-on: ubuntu-latest
 
-  #   - name: validate site inputs
-  #     if: ${{ github.event.inputs.action != 'none' && github.event.inputs.sites == 'none' }}
-  #     run: |
-  #       echo "Missing site."
-  #       echo "Please re-run worklow with all inputs"
-  #       exit 1
+    steps:
+    - name: validate site inputs
+      if: ${{ github.event.inputs.action != 'none' && github.event.inputs.sites == 'none' }}
+      run: |
+        echo "Missing site."
+        echo "Please re-run worklow with all inputs"
+        exit 1
 
-  #   - name: validate action inputs
-  #     if: ${{ github.event.inputs.action == 'none' && github.event.inputs.sites != 'none' }}
-  #     run: |
-  #       echo "Missing action."
-  #       echo "Please re-run worklow with all inputs"
-  #       exit 1
-
+    - name: validate action inputs
+      if: ${{ github.event.inputs.action == 'none' && github.event.inputs.sites != 'none' }}
+      run: |
+        echo "Missing action."
+        echo "Please re-run worklow with all inputs"
+        exit 1
 
   call-wo-setuponly-arc-conn-cls:
     # if: ${{ (github.event.inputs.action == 'wo-setuponly-arc-conn-cls') && github.event.inputs.sites != 'none' }}
