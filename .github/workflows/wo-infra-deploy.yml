@@ -25,7 +25,7 @@ on:
         default: none
         options:
         - none
-        - (AzArc connected) wo-setup-woready-cls
+        - (AzArc connected) wo-setup-woready-arc-cls
         - (new AKS) wo-setup-woready-aks-cls
         - (new AKS) wo-setup-woready-allinone-aks-cls
         - wo-setuponly-arc-conn-cls
@@ -86,8 +86,8 @@ jobs:
         exit 1
 
   call-wo-setuponly-arc-conn-cls:
-    if: ${{ github.event.inputs.action == '(AzArc connected) wo-setup-woready-cls' && github.event.inputs.sites != 'none' }}
-    uses: ./.github/workflows/wo-setuponly-arc-conn-cls-reusable.yml
+    if: ${{ github.event.inputs.action == '(AzArc connected) wo-setup-woready-arc-cls' && github.event.inputs.sites != 'none' }}
+    uses: ./.github/workflows/wo-setup-woready-arc-conn-cls-reusable.yml
     with:
       site: ${{ github.event.inputs.sites }}
       rg: ${{ github.event.inputs.usesiterg }}
@@ -98,7 +98,7 @@ jobs:
 
   call-wo-setuponly-aks-conn-cls:
     if: ${{ github.event.inputs.action == '(new AKS) wo-setup-woready-aks-cls' && github.event.inputs.sites != 'none' }}
-    uses: ./.github/workflows/wo-setuponly-aks-conn-cls-reusable.yml
+    uses: ./.github/workflows/wo-setup-woready-aks-conn-cls-reusable.yml
     with:
       site: ${{ github.event.inputs.sites }}
       rg: ${{ github.event.inputs.usesiterg }}
