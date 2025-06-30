@@ -47,7 +47,7 @@ runs:
       # Ensure numTar is exported properly and loop syntax is correct
       source $GITHUB_ENV
 
-      az cloud update --endpoint-resource-manager "https://eastus2euap.management.azure.com"
+      # az cloud update --endpoint-resource-manager "https://eastus2euap.management.azure.com"
       echo "Deploying $numTar targets..."
       for ((i=0; i<numTar; i++)); do
 

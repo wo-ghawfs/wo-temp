@@ -53,7 +53,6 @@ runs:
           echo "Creating svcgrp : $svcgrp_name "
 
           az rest --method put --headers "Content-Type=application/json" \
-          #           --url "https://eastus2euap.management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" \
                      --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" \
                      --body "{'properties':{'displayName':'$svcgrp_name','parent': { 'resourceId': '/providers/Microsoft.Management/serviceGroups/$parent'}}}" \
                      --resource https://management.azure.com
