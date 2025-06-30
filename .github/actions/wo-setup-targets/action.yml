@@ -67,10 +67,8 @@ runs:
 
         # get customlocation
         # --extended-location '{ "type": "CustomLocation", "name": "/subscriptions/***/resourceGroups/wf-rg-albany/providers/Microsoft.ExtendedLocation/customLocations/wf-albany-custlocation" }'
-        # --extended-location ".pg/sites/${{ inputs.site }}/custom-location.json" \
         concls=$(az customlocation show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.sitecusLocName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query id -o tsv 2>&1)
         echo "extended location: $concls"
-        cat .pg/sites/${{ inputs.site }}/custom-location.json
 
         echo
 

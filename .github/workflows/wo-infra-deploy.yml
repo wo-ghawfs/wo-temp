@@ -136,6 +136,17 @@ jobs:
        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+  call-wo-delete-targets:
+     if: ${{ github.event.inputs.action == 'wo-delete-targets' && github.event.inputs.sites != 'none' }}
+     uses: ./.github/workflows/wo-delete-targets-reuasable.yml
+     with:
+       site: ${{ github.event.inputs.sites }}
+       rg: ${{ github.event.inputs.usesiterg }}
+     secrets:
+       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
   call-wo-delete-aks-conn-cluster:
     if: ${{ github.event.inputs.action == 'wo-delete-aks-conn-cls' && github.event.inputs.sites != 'none' }}
     env:
