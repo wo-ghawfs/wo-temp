@@ -30,8 +30,8 @@ runs:
         if [[ "$aksName" == "${{ steps.siteinfo.outputs.siteClsName }}" ]]; then
 
           echo "Delete cluster"
-          az connectedk8s delete --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}"
-          az aks delete --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}"
+          az connectedk8s delete --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" -y
+          az aks delete --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" -y
 
           echo "Delete cluster-identity"
           az identity delete --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsId }}
