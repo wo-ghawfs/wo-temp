@@ -53,7 +53,8 @@ runs:
           echo "Creating svcgrp : $svcgrp_name "
 
           az rest --method put --headers "Content-Type=application/json" \
-                     --url "https://eastus2euap.management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" \
+          #           --url "https://eastus2euap.management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" \
+                     --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" \
                      --body "{'properties':{'displayName':'$svcgrp_name','parent': { 'resourceId': '/providers/Microsoft.Management/serviceGroups/$parent'}}}" \
                      --resource https://management.azure.com
 
@@ -83,13 +84,10 @@ runs:
       site=${{ inputs.site }}
       create_svcgrps "$site"
 
-      # --- connect service group to context --
-      # --- MSFT tenant has previously created context -get details of that --
-
-      az extension add -s .exts/workload_orchestration-1.1.6-py3-none-any.whl -y || {
-        echo "Failed to add 'workload-orchestration' extension. Please verify the extension name in Azure CLI documentation."
-        exit 1
-      }
+      # az extension add -s .exts/workload_orchestration-1.1.6-py3-none-any.whl -y || {
+      #   echo "Failed to add 'workload-orchestration' extension. Please verify the extension name in Azure CLI documentation."
+      #   exit 1
+      # }
 
       # --- site reference context update only done for highest level SG ---
       echo "update site reference in context"

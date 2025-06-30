@@ -28,10 +28,6 @@ on:
         - (AzArc connected) wo-setup-woready-arc-cls
         - (new AKS) wo-setup-woready-aks-cls
         - (new AKS) wo-setup-woready-allinone-aks-cls
-        - wo-setuponly-arc-conn-cls
-        - wo-all-in-one-arc-conn-cls
-        - wo-setuponly-aks-conn-cls
-        - wo-all-in-one-aks-conn-cls
         - wo-setup-svgrps-targets
         - wo-setup-svgrps
         - wo-setup-targets
@@ -110,6 +106,28 @@ jobs:
   call-wo-all-in-one-aks-conn-cls:
      if: ${{ github.event.inputs.action == '(new AKS) wo-setup-woready-allinone-aks-cls' && github.event.inputs.sites != 'none' }}
      uses: ./.github/workflows/wo-all-in-one-aks-woready-cls-reuasable.yml
+     with:
+       site: ${{ github.event.inputs.sites }}
+       rg: ${{ github.event.inputs.usesiterg }}
+     secrets:
+       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  call-wo-setup-svgrps:
+     if: ${{ github.event.inputs.action == 'wo-setup-svgrps' && github.event.inputs.sites != 'none' }}
+     uses: ./.github/workflows/wo-setup-svgrps-reuasable.yml
+     with:
+       site: ${{ github.event.inputs.sites }}
+       rg: ${{ github.event.inputs.usesiterg }}
+     secrets:
+       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  call-wo-setup-targets:
+     if: ${{ github.event.inputs.action == 'wo-setup-targets' && github.event.inputs.sites != 'none' }}
+     uses: ./.github/workflows/wo-setup-targets-reuasable.yml
      with:
        site: ${{ github.event.inputs.sites }}
        rg: ${{ github.event.inputs.usesiterg }}
