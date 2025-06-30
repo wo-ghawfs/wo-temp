@@ -93,6 +93,10 @@ runs:
         fi
         
         # create customlocation and return custLocId
+        echo "get aks credentials ..."
+        az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }}
+        kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
+
         echo 
         echo " enable-features ...."
         az connectedk8s enable-features -n ${{ steps.siteinfo.outputs.siteClsName }} -g ${{ steps.siteinfo.outputs.rg }} \
