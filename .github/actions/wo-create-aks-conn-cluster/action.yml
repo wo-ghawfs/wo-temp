@@ -20,7 +20,7 @@ runs:
         rg: ${{ inputs.rg }}
 
     - name: create aks cluster
-      id: createaks     
+      id: checkaks     
       shell: bash
       run: |
 
@@ -42,7 +42,6 @@ runs:
         fi
 
     - name: create cluster identity
-      if: ${{ inputs.akscls == 'false' }}
       id: clsid
       shell: bash
       run: |
@@ -51,7 +50,6 @@ runs:
         echo "clusterIdentity=$(az identity show --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsId }} --query id --output tsv)" >> $GITHUB_OUTPUT
 
     - name: Create AKS cluster
-      if: ${{ inputs.akscls == 'false' }}
       id: createaks
       shell: bash
       run: |
