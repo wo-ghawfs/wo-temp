@@ -68,6 +68,7 @@ jobs:
         site: ${{ inputs.site }}
 
     - name: Create targets
+      if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
       uses: ./.github/actions/wo-setup-targets
       with:
         site: ${{ inputs.sites }}
