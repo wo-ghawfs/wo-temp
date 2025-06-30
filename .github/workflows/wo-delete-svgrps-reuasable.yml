@@ -64,7 +64,7 @@ jobs:
     - name: check for target-svgrp associations
       if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
       id: check-svctar
-      uses: ./.github/actions/wo-check-svctar
+      uses: ./.github/actions/wo-check-svc-tar
       with:
         site: ${{ inputs.sites }}
         rg: ${{ inputs.rg }}
