@@ -33,6 +33,7 @@ on:
         - wo-delete-targets-svgrps
         - wo-delete-targets
         - wo-delete-svgrps
+        - wo-delete-aks-conn-cls
         - wo-all-in-one-aks-cls
         required: true
       sites:
@@ -94,6 +95,37 @@ jobs:
        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  call-wo-delete-aks-conn-cluster:
+    if: ${{ github.event.inputs.action == 'wo-delete-aks-conn-cls' && github.event.inputs.sites != 'none' }}
+    env:
+      rg:  ${{ github.event.inputs.usesiterg }}
+      site:  ${{ github.event.inputs.sites }}
+      action:  ${{ github.event.inputs.action }}
+      cmdsinput:  ${{ github.event.inputs.commands }}
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Azure setup
+      id: azsetup
+      uses: ./.github/actions/wo-azure-setup
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        azcliversion: "2.73.0"
+
+    - name: Install prereq extensions
+      id: wo-prereqs
+      uses: ./.github/actions/wo-prereqs
+
+    - name: Delete aks connected cluster
+      id: wo-delete-aks-conn-cluster
+      uses: ./.github/actions/wo-delete-aks-conn-cluster
+
 
 
   action-none:

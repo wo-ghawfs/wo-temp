@@ -1,4 +1,4 @@
-name: Delete AKS cluster 
+name: Delete AKS connected cluster 
 description: Delete AKS cluster
 inputs:
   site:
