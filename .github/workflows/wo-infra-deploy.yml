@@ -67,6 +67,24 @@ permissions:
 
 jobs:
 
+  action-validate:
+    runs-on: ubuntu-latest
+
+    - name: validate site inputs
+      if: ${{ github.event.inputs.action != 'none' && github.event.inputs.sites == 'none' }}
+      run: |
+        echo "Missing site."
+        echo "Please re-run worklow with all inputs"
+        exit 1
+
+    - name: validate action inputs
+      if: ${{ github.event.inputs.action == 'none' && github.event.inputs.sites != 'none' }}
+      run: |
+        echo "Missing action."
+        echo "Please re-run worklow with all inputs"
+        exit 1
+
+
   call-wo-setuponly-arc-conn-cls:
     # if: ${{ (github.event.inputs.action == 'wo-setuponly-arc-conn-cls') && github.event.inputs.sites != 'none' }}
     if: ${{ github.event.inputs.action == '(AzArc connected) wo-setup-woready-cls' && github.event.inputs.sites != 'none' }}
@@ -80,7 +98,8 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   call-wo-setuponly-aks-conn-cls:
-    if: ${{ (github.event.inputs.action == 'wo-setuponly-aks-conn-cls') && github.event.inputs.sites != 'none' }}
+    # if: ${{ (github.event.inputs.action == 'wo-setuponly-aks-conn-cls') && github.event.inputs.sites != 'none' }}
+    if: ${{ github.event.inputs.action == '(new AKS) wo-setup-woready-aks-cls' && github.event.inputs.sites != 'none' }}
     uses: ./.github/workflows/wo-setuponly-aks-conn-cls-reusable.yml
     with:
       site: ${{ github.event.inputs.sites }}
@@ -90,9 +109,10 @@ jobs:
       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-  call-wo-all-in-one-arc-conn-cls:
-     if: ${{ github.event.inputs.action == 'wo-all-in-one-arc-conn-cls' && github.event.inputs.sites != 'none' }}
-     uses: ./.github/workflows/wo-all-in-one-arc-conn-cls-reusable.yml
+  call-wo-all-in-one-aks-conn-cls:
+     # if: ${{ github.event.inputs.action == 'wo-all-in-one-aks-conn-cls' && github.event.inputs.sites != 'none' }}
+     if: ${{ github.event.inputs.action == '(new AKS) wo-setup-woready-allinone-aks-cls' && github.event.inputs.sites != 'none' }}
+     uses: ./.github/workflows/wo-all-in-one-aks-woready-cls-reuasable.yml
      with:
        site: ${{ github.event.inputs.sites }}
        rg: ${{ github.event.inputs.usesiterg }}
@@ -101,9 +121,9 @@ jobs:
        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-  call-wo-all-in-one-aks-conn-cls:
-     if: ${{ github.event.inputs.action == 'wo-all-in-one-aks-conn-cls' && github.event.inputs.sites != 'none' }}
-     uses: ./.github/workflows/wo-all-in-one-aks-woready-cls-reuasable.yml
+  call-wo-all-in-one-arc-conn-cls:
+     if: ${{ github.event.inputs.action == 'wo-all-in-one-arc-conn-cls' && github.event.inputs.sites != 'none' }}
+     uses: ./.github/workflows/wo-all-in-one-arc-conn-cls-reusable.yml
      with:
        site: ${{ github.event.inputs.sites }}
        rg: ${{ github.event.inputs.usesiterg }}

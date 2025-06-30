@@ -1,8 +1,9 @@
 # Resusable workflow to wo-ready a given cluster
 # After verifying cluster connectivity, the workflow
 # will install all the extensions and enable CL
+# It will also configure service groups and targets
 
-name: wo-ready-aks-conn-cls (Reusable)
+name: wo-all-in-one-woready-aks-conn-cls (Reusable)
 
 on:
   workflow_call:
@@ -23,7 +24,7 @@ on:
 
 jobs:
 
-  wo-all-in-one-aks-woready-cls:
+  wo-all-in-one-woready-aks-cls:
     env:
       site: ${{ inputs.site }}
       rg: ${{ inputs.rg }}
@@ -88,10 +89,10 @@ jobs:
     #     site: ${{ inputs.site }}
 
     # - name: Create targets
-    #  uses: ./.github/actions/wo-setup-targets
-    #  with:
-    #    site: ${{ inputs.sites }}
-    #    rg: ${{ inputs.rg }}
+    #   uses: ./.github/actions/wo-setup-targets
+    #   with:
+    #     site: ${{ inputs.sites }}
+    #     rg: ${{ inputs.rg }}
 
     # - name: Delete targets
     #   uses: ./.github/actions/wo-delete-targets

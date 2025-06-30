@@ -23,7 +23,7 @@ on:
 
 jobs:
 
-  wo-setuponly-arc-conn-cls:
+  wo-setup-woready-arc-conn-cls:
     env:
       site: ${{ inputs.site }}
       rg: ${{ inputs.rg }}
@@ -63,16 +63,16 @@ jobs:
         siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
 
-    #- name: Create w-o ready cluster
-    #  if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
-    #  id: aksClsWo
-    #  uses: ./.github/actions/wo-setup-aks-cluster
-    #  with:
-    #    site: ${{ inputs.sites }}
-    #    rg: ${{ inputs.rg }}
-    #    akscls: ${{ steps.check-wo-ready.outputs.akscls }}
-    #    akscon: ${{ steps.check-wo-ready.outputs.akscon }}
-    #    cusloc: ${{ steps.check-wo-ready.outputs.cusloc }}
-    #    woextn: ${{ steps.check-wo-ready.outputs.woextn }}
-    #    aiocrt: ${{ steps.check-wo-ready.outputs.aiocrt }}
+    - name: Create w-o ready cluster
+      if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
+      id: setup-wo-ready
+      uses: ./.github/actions/wo-setup-woready-cluster
+      with:
+        site: ${{ inputs.sites }}
+        rg: ${{ inputs.rg }}
+        akscls: ${{ steps.check-wo-ready.outputs.akscls }}
+        akscon: ${{ steps.check-wo-ready.outputs.akscon }}
+        cusloc: ${{ steps.check-wo-ready.outputs.cusloc }}
+        woextn: ${{ steps.check-wo-ready.outputs.woextn }}
+        aiocrt: ${{ steps.check-wo-ready.outputs.aiocrt }}
 

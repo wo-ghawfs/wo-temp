@@ -2,7 +2,7 @@
 # After verifying cluster connectivity, the workflow
 # will install all the extensions and enable CL
 
-name: wo-ready-aks-conn-cls (Reusable)
+name: wo-setup-woready-aks-conn-cls (Reusable)
 
 on:
   workflow_call:
@@ -23,7 +23,7 @@ on:
 
 jobs:
 
-  wo-setuponly-aks-conn-cls:
+  wo-setup-woready-aks-conn-cls:
     env:
       site: ${{ inputs.site }}
       rg: ${{ inputs.rg }}
@@ -61,7 +61,7 @@ jobs:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
 
-    - name: Check for WO readiness
+    - name: Check for w-o readiness
       id: check-wo-ready
       uses: ./.github/actions/wo-check-woready-cluster
       with:
@@ -70,16 +70,15 @@ jobs:
         siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
 
-    #- name: Create w-o ready cluster
-    #  if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
-    #  id: aksClsWo
-    #  uses: ./.github/actions/wo-setup-aks-cluster
-    #  with:
-    #    site: ${{ inputs.sites }}
-    #    rg: ${{ inputs.rg }}
-    #    akscls: ${{ steps.check-wo-ready.outputs.akscls }}
-    #    akscon: ${{ steps.check-wo-ready.outputs.akscon }}
-    #    cusloc: ${{ steps.check-wo-ready.outputs.cusloc }}
-    #    woextn: ${{ steps.check-wo-ready.outputs.woextn }}
-    #    aiocrt: ${{ steps.check-wo-ready.outputs.aiocrt }}
-
+    - name: Create w-o ready cluster
+      if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
+      id: aksClsWo
+      uses: ./.github/actions/wo-setup-woready-cluster
+      with:
+        site: ${{ inputs.sites }}
+        rg: ${{ inputs.rg }}
+        akscls: ${{ steps.check-wo-ready.outputs.akscls }}
+        akscon: ${{ steps.check-wo-ready.outputs.akscon }}
+        cusloc: ${{ steps.check-wo-ready.outputs.cusloc }}
+        woextn: ${{ steps.check-wo-ready.outputs.woextn }}
+        aiocrt: ${{ steps.check-wo-ready.outputs.aiocrt }}
