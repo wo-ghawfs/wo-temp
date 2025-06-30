@@ -25,8 +25,9 @@ on:
         options:
         - none
         - wo-setuponly-arc-conn-cls
-        - wo-setuponly-aks-conn-cls
         - wo-all-in-one-arc-conn-cls
+        - wo-setuponly-aks-conn-cls
+        - wo-all-in-one-aks-conn-cls
         - wo-setup-svgrps-targets
         - wo-setup-svgrps
         - wo-setup-targets
@@ -34,7 +35,6 @@ on:
         - wo-delete-targets
         - wo-delete-svgrps
         - wo-delete-aks-conn-cls
-        - wo-all-in-one-aks-cls
         required: true
       sites:
         type: choice
@@ -88,6 +88,17 @@ jobs:
   call-wo-all-in-one-arc-conn-cls:
      if: ${{ github.event.inputs.action == 'wo-all-in-one-arc-conn-cls' && github.event.inputs.sites != 'none' }}
      uses: ./.github/workflows/wo-all-in-one-arc-conn-cls-reusable.yml
+     with:
+       site: ${{ github.event.inputs.sites }}
+       rg: ${{ github.event.inputs.usesiterg }}
+     secrets:
+       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  call-wo-all-in-one-aks-conn-cls:
+     if: ${{ github.event.inputs.action == 'wo-all-in-one-aks-conn-cls' && github.event.inputs.sites != 'none' }}
+     uses: ./.github/workflows/wo-all-in-one-aks-woready-cls-reuasable.yml
      with:
        site: ${{ github.event.inputs.sites }}
        rg: ${{ github.event.inputs.usesiterg }}
