@@ -62,7 +62,6 @@ jobs:
         rg: ${{ inputs.rg }}
         siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
-
     - name: Create w-o ready cluster
       if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
       id: setup-wo-ready

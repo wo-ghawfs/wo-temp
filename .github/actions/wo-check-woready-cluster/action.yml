@@ -166,11 +166,12 @@ runs:
           echo "woextn=true" >> "$GITHUB_OUTPUT"
           echo "aiocrt=true" >> "$GITHUB_OUTPUT"
 
-          cuslocid=$(echo "$concls" | yq '.id')
-          echo "cuslocid: $cuslocid"
+          # cuslocid=$(echo "$concls" | yq '.id')
+          # echo "cuslocid: $cuslocid"
+
           # good to do
-          yq -i ".name = \"$cuslocid\"" .pg/sites/${{ inputs.site }}/custom-location.json
-          echo "updated cloc: .pg/sites/${{ inputs.site }}/custom-location.json"
+          # yq -i ".name = \"$cuslocid\"" .pg/sites/${{ inputs.site }}/custom-location.json
+          # echo "updated cloc: .pg/sites/${{ inputs.site }}/custom-location.json"
 
         else
           echo "akscls=$akscls" >> $GITHUB_OUTPUT       
