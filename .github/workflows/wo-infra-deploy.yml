@@ -125,7 +125,9 @@ jobs:
     - name: Delete aks connected cluster
       id: wo-delete-aks-conn-cluster
       uses: ./.github/actions/wo-delete-aks-conn-cluster
-
+      with: 
+       site: ${{ github.event.inputs.sites }}
+       rg: ${{ github.event.inputs.usesiterg }}
 
 
   action-none:

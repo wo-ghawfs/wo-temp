@@ -7,9 +7,6 @@ inputs:
   rg:
     description: RG to be used for AKS cluster
     required: true
-  siteClsName:
-    description: Site AKS Cluster name
-    required: true
 
 runs:
   using: "composite"
