@@ -25,6 +25,9 @@ on:
         default: none
         options:
         - none
+        - wo-setup-woready-cls (Arc-connected)
+        - wo-setup-woready-aks-cls (new AKS)
+        - wo-setup-woready-allinone-aks-cls (new AKS)
         - wo-setuponly-arc-conn-cls
         - wo-all-in-one-arc-conn-cls
         - wo-setuponly-aks-conn-cls
