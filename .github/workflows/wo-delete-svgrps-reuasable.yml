@@ -69,8 +69,9 @@ jobs:
         site: ${{ inputs.sites }}
         rg: ${{ inputs.rg }}
 
-    - name: Create service groups
-      if: ${{ steps.check-svctar.outputs.woready == 'false' }}
+    - name: Delete service groups if no assoc. targets found
+      if: ${{ steps.check-svctar.outputs.svcfound == 'false' }}
       uses: ./.github/actions/wo-delete-svgrps
       with:
         site: ${{ inputs.site }}
+        rg: ${{ inputs.rg }}
