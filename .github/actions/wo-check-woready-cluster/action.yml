@@ -181,12 +181,12 @@ runs:
 
         echo 
         echo "-- current state of readiness --"
-        echo "Cluster present :    $akscls"       
-        echo "ConnectedCluster:    $akscon"       
-        echo "CustLoc Enabled :    $cusloc"       
+        echo "Cluster present  :    $akscls"       
+        echo "ConnectedCluster :    $akscon"       
+        echo "CustLoc Enabled  :    $cusloc"       
         echo "Extensions"       
-        echo "AIO-Certmgr          :    $aiocrt"
-        echo "WorkloadOrchestration:    $woextn"
-        echo
-        echo "----------------------------------"
+        echo "----------"       
+        echo "AIO-Certmgr      :    $aiocrt"
+        echo "WorkloadOrchestr :    $woextn"
+        echo "--------------------------------"
         echo "Cluster WO readiness: $woready"
