@@ -68,7 +68,7 @@ runs:
         if ! az workload-orchestration schema version show \
           -g ${{ inputs.resource-group }} \
           --schema-name ${{ env.SCHEMA_NAME }} \
-          -n ${{ env.SCHEMA_VERSION }}; then
+          -v ${{ env.SCHEMA_VERSION }}; then
           echo "Error: Schema version ${{ env.SCHEMA_VERSION }} does not exist for schema ${{ env.SCHEMA_NAME }}"
           echo "Please ensure the schema exists before creating the config template."
           exit 1
@@ -83,7 +83,7 @@ runs:
         if ! az workload-orchestration config-template version show \
           -g ${{ inputs.resource-group }} \
           --config-template-name ${{ env.CONFIG_NAME }} \
-          -n ${{ env.CONFIG_VERSION }}; then
+          -v ${{ env.CONFIG_VERSION }}; then
           
           echo "Config template version not found. Creating new config template..."
           
