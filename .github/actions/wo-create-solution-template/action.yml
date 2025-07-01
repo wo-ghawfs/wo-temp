@@ -137,7 +137,7 @@ runs:
         if ! az workload-orchestration solution-template version show \
           -g ${{ inputs.resource-group }} \
           --solution-template-name ${{ env.TEMPLATE_NAME }} \
-          -n ${{ env.TEMPLATE_VERSION }}; then
+          -v ${{ env.TEMPLATE_VERSION }}; then
           echo "Solution template version not found. Creating new version..."
           az workload-orchestration solution-template create \
             -g ${{ inputs.resource-group }} \
