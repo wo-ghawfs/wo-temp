@@ -61,10 +61,10 @@ permissions:
 
 jobs:
 
-  input-validation:
-    runs-on: ubuntu-latest
+  # input-validation:
+    # runs-on: ubuntu-latest
 
-    steps:
+    # steps:
     # - name: validate site inputs
     #   if: ${{ github.event.inputs.action != 'none' && github.event.inputs.sites == 'none' }}
     #   run: |
