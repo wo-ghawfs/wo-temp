@@ -42,16 +42,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       apps: ${{ github.event_name == 'workflow_dispatch' && steps.app-list-dispatch.outputs.apps || steps.app-list.outputs.apps }}
-      should_run: ${{ steps.check-author.outputs.should_run }}
     steps:
-      - name: Check if bot or user commit
+      - name: Git Info
         id: check-author
         run: |
-          if [[ "${{ github.actor }}" == *"[bot]" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "should_run=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_run=false" >> $GITHUB_OUTPUT
-          fi
+          echo "Actor: ${{ github.actor }}"
+          echo "Event: ${{ github.event_name }}"
 
       - uses: actions/checkout@v4
       - name: Check changed files
