@@ -15,7 +15,7 @@ runs:
       run: |
         echo "INSTALLING CLI Extension workload-orchestration ..."
         echo
-        az extension add -s ${{ inputs.extension-file }} -y
+        az extension add --name workload-orchestration
         az workload-orchestration -h
         az extension list -o table
         echo
