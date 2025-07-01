@@ -67,15 +67,15 @@ All the configurations and data for setup are sourced from the respective files 
 
 ```mermaid
 graph TD
-    A[ Manual Trigger w/Options] --> | Deploy Options | B[Cluster or SGs or Targets]
+    A[ Manual Trigger w/Options] --> | Options | B[Site or SGs or Targets]
     B --> |Select Site| C{Parse Selection}
-    C --> |Site| D[deploy site]
+    C --> |Site| D[WO ready Site]
     C --> |SGs| E[Setup SGs]
-    C --> |Targets| F[Setup targets]
+    C --> |Targets| F[Setup Targets]
     D --> G{All deployed ?}
     E --> G
     F --> G
-    G --> | cluster woready | H[Ready for solution deployment]
+    G --> |  w-o ready | H[Ready for Soln Deployments]
 ```
 
 ## wo_syncversion

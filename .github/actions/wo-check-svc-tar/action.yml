@@ -41,7 +41,7 @@ runs:
         echo "Target being checked: $target_name in RG $wfrg"
 
         echo "Getting targetId ..."
-        targetId=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query id --output tsv 2>/dev/null)
+        targetId=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query id --output tsv 2>&1)
         echo "$targetId"
 
         # if [[ -z "$targetId" ]]; then
