@@ -113,7 +113,10 @@ runs:
         echo "custLocId=$(az customlocation show --name ${{ steps.siteinfo.outputs.sitecusLocName }} \
                                  --resource-group ${{ steps.siteinfo.outputs.rg }} --query id -o tsv)" >> $GITHUB_OUTPUT
 
-        # az cloud update --endpoint-resource-manager "https://management.azure.com"
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: update custlocId
       shell: bash
