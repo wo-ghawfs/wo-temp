@@ -53,7 +53,7 @@ runs:
             sg_assoc="true"
           fi   
         else
-          echo "Target $target_name does not exist in RG $wfrg. Skipping deletion."
+          echo " ---> Target $target_name does not exist in RG $wfrg. Skipping deletion."
           return
         fi
       }
@@ -74,8 +74,8 @@ runs:
       echo "svcfound=$sg_assoc" >> $GITHUB_OUTPUT
       echo "All targets checked"
       if [[ $sg_assoc == "true" ]]; then
-        echo "Atleast one SG associated target found. Cannot delete Service Groups. Skipping"
+        echo " ---> Atleast one SG associated target found. Cannot delete Service Groups. Skipping"
       else
-        echo "No target-SG association found. Deleting Service Groups ..."
+        echo " ---> No target-SG association found. Deleting Service Groups ..."
       fi 
       

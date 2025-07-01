@@ -18,8 +18,7 @@ runs:
       rg: ${{ inputs.rg }}
 
   - name: wo cli extn
-    id: install wo CLI extn
-    uses: ./.github/actions/wo-install-wo-extn
+    uses: ./.github/actions/wo-install-wo-extension
 
   - name: delete service groups dynamically based on defined hierarchy levels
     id: levels
