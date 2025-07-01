@@ -38,11 +38,11 @@ runs:
         
         az extension list -o table
         
-        az workload-orchestration schema version show -g ${{ inputs.resource-group }} --schema-name ${{ env.SCHEMA_NAME }} -n ${{ env.SCHEMA_VERSION }}
+        az workload-orchestration schema version show -g ${{ inputs.resource-group }} --schema-name ${{ env.SCHEMA_NAME }} -v ${{ env.SCHEMA_VERSION }}
 
         echo "Checked for schema version."
         
-        if ! az workload-orchestration schema version show -g ${{ inputs.resource-group }} --schema-name ${{ env.SCHEMA_NAME }} -n ${{ env.SCHEMA_VERSION }}; then
+        if ! az workload-orchestration schema version show -g ${{ inputs.resource-group }} --schema-name ${{ env.SCHEMA_NAME }} -v ${{ env.SCHEMA_VERSION }}; then
           echo "Schema version not found. Creating new schema..."
           az workload-orchestration schema create \
             -g ${{ inputs.resource-group }} \
