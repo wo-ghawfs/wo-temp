@@ -25,9 +25,9 @@ on:
         default: none
         options:
         - none
-        - (AzArc connected) wo-setup-woready-arc-cls
-        - (new AKS) wo-setup-woready-aks-cls
-        - (new AKS) wo-setup-woready-allinone-aks-cls
+        - (** AzArc connected **) wo-setup-woready-arc-cls
+        - (** new AKS **) wo-setup-woready-aks-cls
+        - (** new AKS **) wo-setup-woready-allinone-aks-cls
         - wo-setup-svgrps
         - wo-setup-targets
         - wo-delete-targets
