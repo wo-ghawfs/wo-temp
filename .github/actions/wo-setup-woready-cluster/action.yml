@@ -57,15 +57,16 @@ runs:
         az k8s-extension create --resource-group ${{ steps.siteinfo.outputs.rg }} --cluster-name ${{ steps.siteinfo.outputs.siteClsName }} \
                                 --cluster-type connectedClusters --name ${{ steps.siteinfo.outputs.extnName }} --extension-type Microsoft.workloadorchestration --scope cluster \
                                 --release-train stable --version ${{ steps.siteinfo.outputs.extnVer }} --auto-upgrade false --config redis.persistentVolume.storageClass="default" \
-                                --config redis.persistentVolume.size=20Gi
+                                --config redis.persistentVolume.size=20Gi --subscription ${{ steps.siteinfo.outputs.subId }}
 
     - name: get cluster and wo extension details
       id: extension
       shell: bash
       run: |
-        echo "clusterId=$(az connectedk8s show --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --query id --output tsv)" >> $GITHUB_OUTPUT
+        echo "clusterId=$(az connectedk8s show --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} \
+                                               --subscription ${{ steps.siteinfo.outputs.subId }} --query id --output tsv)" >> $GITHUB_OUTPUT
         echo "extensionId=$(az k8s-extension show --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.extnName }} --cluster-type connectedClusters \
-                                                  --cluster-name ${{ steps.siteinfo.outputs.siteClsName }} --query id --output tsv)" >>  $GITHUB_OUTPUT
+                                                  --cluster-name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }} --query id --output tsv)" >>  $GITHUB_OUTPUT
 
     - name: get custLoc OID for Service Principals
       # echo "sp-cl-oid=$(az ad sp show --id bc313c14-388c-4e7d-a58e-70017303ee3b --query id -o tsv)" >> $GITHUB_OUTPUT
@@ -88,18 +89,18 @@ runs:
           echo 
           echo "customlocation already exists. extract cusLocId  ...."
           echo "custLocId=$(az customlocation show --name ${{ steps.siteinfo.outputs.sitecusLocName }} \
-                               --resource-group ${{ steps.siteinfo.outputs.rg }} --query id -o tsv)" >> $GITHUB_OUTPUT
+                               --resource-group ${{ steps.siteinfo.outputs.rg }} --subscription ${{ steps.siteinfo.outputs.subId }} --query id -o tsv)" >> $GITHUB_OUTPUT
           exit 0
         fi
         
         # create customlocation and return custLocId
         echo "get aks credentials ..."
-        az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }}
+        az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }}
         kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
 
         echo 
         echo " enable-features ...."
-        az connectedk8s enable-features -n ${{ steps.siteinfo.outputs.siteClsName }} -g ${{ steps.siteinfo.outputs.rg }} \
+        az connectedk8s enable-features -n ${{ steps.siteinfo.outputs.siteClsName }} -g ${{ steps.siteinfo.outputs.rg }} --subscription ${{ steps.siteinfo.outputs.subId }} \
                                         --custom-locations-oid ${{ steps.custLocOid.outputs.sp-cl-oid }} --features cluster-connect custom-locations
         echo 
         echo " customlocation create ...."
@@ -110,7 +111,7 @@ runs:
         
         echo 
         echo " extract customlocation Id ...."
-        echo "custLocId=$(az customlocation show --name ${{ steps.siteinfo.outputs.sitecusLocName }} \
+        echo "custLocId=$(az customlocation show --name ${{ steps.siteinfo.outputs.sitecusLocName }} --subscription ${{ steps.siteinfo.outputs.subId }} \
                                  --resource-group ${{ steps.siteinfo.outputs.rg }} --query id -o tsv)" >> $GITHUB_OUTPUT
 
     - name: Checkout
