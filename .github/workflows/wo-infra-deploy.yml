@@ -14,7 +14,7 @@
 #
 #------------------------------------------------------------------------
 
-name: wo-infra-deploy
+name: WO-INFRA-DEPLOY
 
 on:
   workflow_dispatch:
