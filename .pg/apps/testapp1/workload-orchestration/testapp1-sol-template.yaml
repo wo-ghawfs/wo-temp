@@ -1,6 +1,6 @@
 metadata:
   name: testapp1-config-template
-  version: 2.0.1
+  version: 2.0.2
 schema:
   name: testapp1-schema
   version: 2.0.1
