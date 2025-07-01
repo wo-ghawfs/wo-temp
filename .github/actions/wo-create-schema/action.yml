@@ -33,6 +33,12 @@ runs:
       shell: bash
       run: |
         SCHEMA_FILE="${{ inputs.schema-file }}"
+
+        echo "Checking if schema version already exists"
+
+        az workload-orchestration schema version show -g ${{ inputs.resource-group }} --schema-name ${{ env.SCHEMA_NAME }} -n ${{ env.SCHEMA_VERSION }}
+
+        echo "Checked for schema version."
         
         if ! az workload-orchestration schema version show -g ${{ inputs.resource-group }} --schema-name ${{ env.SCHEMA_NAME }} -n ${{ env.SCHEMA_VERSION }}; then
           echo "Schema version not found. Creating new schema..."
