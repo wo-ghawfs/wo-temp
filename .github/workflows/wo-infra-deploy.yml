@@ -61,23 +61,32 @@ permissions:
 
 jobs:
 
-  # input-validation:
-    # runs-on: ubuntu-latest
+  input-validation:
+    runs-on: ubuntu-latest
 
-    # steps:
-    # - name: validate site inputs
-    #   if: ${{ github.event.inputs.action != 'none' && github.event.inputs.sites == 'none' }}
-    #   run: |
-    #     echo " *** INPUT ERROR *** Missing site."
-    #     echo " --> Please re-run worklow with correct inputs"
-    #     exit 1
+    steps:
+    - name: input parameters
+      run: |
+        echo "This run is with the following parms:"
+        echo "action:    ${{ github.event.inputs.action }}"
+        echo "sites:     ${{ github.event.inputs.sites }}"
+        echo "commands:  ${{ github.event.inputs.commands }}"
+        echo "usesiterg: ${{ github.event.inputs.usesiterg }}"
+        echo
 
-    # - name: validate action inputs
-    #   if: ${{ github.event.inputs.action == 'none' && github.event.inputs.sites != 'none' && github.event.inputs.commands == 'no action' }}
-    #   run: |
-    #     echo " *** INPUT ERROR *** Missing action."
-    #     echo " --> Please re-run worklow with correct inputs"
-    #     exit 1
+    - name: validate site inputs
+      if: ${{ github.event.inputs.action != 'none' && github.event.inputs.sites == 'none' }}
+      run: |
+        echo " *** INPUT ERROR *** Missing site."
+        echo " --> Please re-run worklow with correct inputs"
+        exit 1
+
+    - name: validate action inputs
+      if: ${{ github.event.inputs.action == 'none' && github.event.inputs.sites != 'none' && github.event.inputs.commands == 'no action' }}
+      run: |
+        echo " *** INPUT ERROR *** Missing action."
+        echo " --> Please re-run worklow with correct inputs"
+        exit 1
 
   call-wo-setuponly-arc-conn-cls:
     if: ${{ github.event.inputs.action == '(** AzArc connected **) wo-setup-woready-arc-cls' && github.event.inputs.sites != 'none' }}
