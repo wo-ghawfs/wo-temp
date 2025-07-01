@@ -17,4 +17,5 @@ runs:
         echo
         az extension add --name workload-orchestration
         az workload-orchestration -h
+        az extension list -o table
         echo
