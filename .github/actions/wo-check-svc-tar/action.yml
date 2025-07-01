@@ -44,7 +44,8 @@ runs:
         targetId=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query id --output tsv 2>/dev/null)
         echo "$targetId"
 
-        if [[ -z "$targetId" ]]; then
+        # if [[ -z "$targetId" ]]; then
+        if [[ -z "$targetId" || "$targetId" == "null" ]]; then
           echo "Target $target_name does not exist in RG $wfrg. Skipping deletion."
           return
         fi
