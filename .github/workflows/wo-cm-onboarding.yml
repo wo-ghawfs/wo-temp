@@ -255,7 +255,7 @@ jobs:
           specification-file: ${{ steps.get-files.outputs.specs_file }}
           metadata-file: ${{ steps.get-files.outputs.metadata_file }}
 
-  update_common_resources:
+  update_common_artifacts:
     if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.update_common != 'none' }}
     runs-on: ubuntu-latest
     env:
