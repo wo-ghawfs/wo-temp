@@ -124,7 +124,7 @@ runs:
         if ! az workload-orchestration schema version show \
           -g ${{ inputs.resource-group }} \
           --schema-name ${{ env.SCHEMA_NAME }} \
-          -n ${{ env.SCHEMA_VERSION }}; then
+          -v ${{ env.SCHEMA_VERSION }}; then
           echo "Error: Schema version ${{ env.SCHEMA_VERSION }} does not exist for schema ${{ env.SCHEMA_NAME }}"
           echo "Please ensure the schema and version exist before creating the solution template."
           exit 1
