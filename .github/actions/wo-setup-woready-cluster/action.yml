@@ -51,11 +51,11 @@ runs:
       if: ${{ inputs.woextn == 'false' }}
       shell: bash
       run: |
-        az cloud update --endpoint-resource-manager "https://eastus2euap.management.azure.com"
+        # az cloud update --endpoint-resource-manager "https://eastus2euap.management.azure.com"
         echo " "
         echo "INSTALL workload orchestration extension"
         az k8s-extension create --resource-group ${{ steps.siteinfo.outputs.rg }} --cluster-name ${{ steps.siteinfo.outputs.siteClsName }} \
-                                --cluster-type connectedClusters --name "workloadorchestration" --extension-type Microsoft.workloadorchestration --scope cluster \
+                                --cluster-type connectedClusters --name ${{ steps.siteinfo.outputs.extnName }} --extension-type Microsoft.workloadorchestration --scope cluster \
                                 --release-train stable --version ${{ steps.siteinfo.outputs.extnVer }} --auto-upgrade false --config redis.persistentVolume.storageClass="default" \
                                 --config redis.persistentVolume.size=20Gi
 
@@ -64,7 +64,7 @@ runs:
       shell: bash
       run: |
         echo "clusterId=$(az connectedk8s show --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --query id --output tsv)" >> $GITHUB_OUTPUT
-        echo "extensionId=$(az k8s-extension show --resource-group ${{ steps.siteinfo.outputs.rg }} --name "workloadorchestration" --cluster-type connectedClusters \
+        echo "extensionId=$(az k8s-extension show --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.extnName }} --cluster-type connectedClusters \
                                                   --cluster-name ${{ steps.siteinfo.outputs.siteClsName }} --query id --output tsv)" >>  $GITHUB_OUTPUT
 
     - name: get custLoc OID for Service Principals

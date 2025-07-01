@@ -99,9 +99,9 @@ runs:
         echo "check for workload-orchestration extension ... "
         wo=$(az rest --method GET \
              --resource https://management.azure.com \
-             --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/workloadorchestration?api-version=2023-05-01" --query name -o tsv 2>&1) || true
+             --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}/Providers/Microsoft.KubernetesConfiguration/extensions/${{ steps.siteinfo.outputs.extnName }}?api-version=2023-05-01" --query name -o tsv 2>&1) || true
 
-        if [[ "$wo" == "workloadorchestration" ]]; then 
+        if [[ "$wo" == "${{ steps.siteinfo.outputs.extnName }}" ]]; then 
           echo " ---> wo extension exists"
           woextn="true"
         else

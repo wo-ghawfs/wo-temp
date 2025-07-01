@@ -62,6 +62,9 @@ outputs:
   extnVer:
     description: WO extension version
     value: ${{ steps.siteinfo.outputs.extnVer }}
+  extnName:
+    description: WO extension name
+    value: ${{ steps.siteinfo.outputs.extnName }}
 
 runs:
   using: "composite"
@@ -119,6 +122,7 @@ runs:
 
         echo "whlVer=$(yq '.workloadorchestration.whlVer' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
         echo "extnVer=$(yq '.workloadorchestration.extensionVer' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+        echo "extnName=$(yq '.workloadorchestration.extensionName' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
 
     - name: Debug dumpinfo
       shell: bash
@@ -143,3 +147,4 @@ runs:
         echo "sitecusLocNS:     ${{ steps.siteinfo.outputs.sitecusLocNS }}"
         echo "whlVer:           ${{ steps.siteinfo.outputs.whlVer }}"
         echo "extnVer:          ${{ steps.siteinfo.outputs.extnVer }}"
+        echo "extnName:         ${{ steps.siteinfo.outputs.extnName }}"

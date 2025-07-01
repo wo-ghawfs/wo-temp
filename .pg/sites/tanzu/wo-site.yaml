@@ -4,6 +4,6 @@ site:
   aksClusterName: 		"jiadutkg0605"
   aksClusterIdentity: 		"wf-tanzu-clsId"
   customLocationRG: 		"jiadutkg0605"
-  customLocationName: 		"maestrocustes"
+  customLocationName: 		"maestrocustest"
   customLocationLocation:       "eastus2euap"
-  customLocationNamespace: 	"wf-tanzu-ns"
+  customLocationNamespace: 	"maestrocustest"
