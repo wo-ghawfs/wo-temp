@@ -23,7 +23,7 @@ runs:
 
   - name: install wo cli extn
     id: woextn
-    uses: ./.github/actions/wo-install-wo-extn
+    uses: ./.github/actions/wo-install-wo-extension
 
   - name: check for SG association
     id: checksvctar
