@@ -67,7 +67,7 @@ jobs:
     steps:
     - name: input parameters
       run: |
-        echo "This run is with the following parms:
+        echo "This run is with the following parms:"
         echo "action:    ${{ github.event.inputs.action }}"
         echo "sites:     ${{ github.event.inputs.sites }}"
         echo "commands:  ${{ github.event.inputs.commands }}"
