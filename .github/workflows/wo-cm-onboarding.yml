@@ -250,7 +250,6 @@ jobs:
           metadata-file: ${{ steps.get-files.outputs.metadata_file }}
 
   deploy-common-resources:
-    needs: detect-apps-to-deploy
     if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.deploy_common != 'none' }}
     runs-on: ubuntu-latest
     env:
