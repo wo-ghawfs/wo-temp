@@ -14,7 +14,7 @@
 #
 #------------------------------------------------------------------------
 
-name: WO-INFRA-DEPLOY
+name: wo-infra-deploy
 
 on:
   workflow_dispatch:
@@ -65,12 +65,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: validate site inputs
-      if: ${{ github.event.inputs.action != 'none' && github.event.inputs.sites == 'none' }}
-      run: |
-        echo " *** INPUT ERROR *** Missing site."
-        echo " --> Please re-run worklow with correct inputs"
-        exit 1
+    # - name: validate site inputs
+    #   if: ${{ github.event.inputs.action != 'none' && github.event.inputs.sites == 'none' }}
+    #   run: |
+    #     echo " *** INPUT ERROR *** Missing site."
+    #     echo " --> Please re-run worklow with correct inputs"
+    #     exit 1
 
     # - name: validate action inputs
     #   if: ${{ github.event.inputs.action == 'none' && github.event.inputs.sites != 'none' && github.event.inputs.commands == 'no action' }}
