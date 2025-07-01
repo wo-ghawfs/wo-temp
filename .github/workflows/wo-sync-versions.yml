@@ -1,6 +1,6 @@
 # A workflow to sync wo artifacts with Helm chart version
 
-name: wo-sync-versions
+name: WO-SYNC-VERSIONS
 
 on:
   push:
