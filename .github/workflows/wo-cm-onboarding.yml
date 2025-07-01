@@ -1,4 +1,4 @@
-name: cm-onboarding
+name: wo-cm-onboarding
 
 on:
   push:
@@ -42,7 +42,17 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       apps: ${{ github.event_name == 'workflow_dispatch' && steps.app-list-dispatch.outputs.apps || steps.app-list.outputs.apps }}
+      should_run: ${{ steps.check-author.outputs.should_run }}
     steps:
+      - name: Check if bot or user commit
+        id: check-author
+        run: |
+          if [[ "${{ github.actor }}" == *"[bot]" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          fi
+
       - uses: actions/checkout@v4
       - name: Check changed files
         if: github.event_name == 'push'
@@ -102,7 +112,7 @@ jobs:
 
   deploy-apps:
     needs: detect-apps-to-deploy
-    if: ${{ needs.detect-apps-to-deploy.outputs.apps != '[]' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none') }}
+    if: ${{ needs.detect-apps-to-deploy.outputs.apps != '[]' && needs.detect-apps-to-deploy.outputs.should_run == 'true' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none') }}
     runs-on: ubuntu-latest
     env:
       AZURE_RESOURCE_GROUP: 'cm-resources'
@@ -244,7 +254,8 @@ jobs:
           metadata-file: ${{ steps.get-files.outputs.metadata_file }}
 
   deploy-common-resources:
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.deploy_common != 'none' }}
+    needs: detect-apps-to-deploy
+    if: ${{ (github.event_name != 'workflow_dispatch' && needs.detect-apps-to-deploy.outputs.should_run == 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_common != 'none') }}
     runs-on: ubuntu-latest
     env:
       AZURE_RESOURCE_GROUP: 'cm-resources'
