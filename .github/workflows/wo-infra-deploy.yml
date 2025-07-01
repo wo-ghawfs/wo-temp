@@ -28,10 +28,8 @@ on:
         - (AzArc connected) wo-setup-woready-arc-cls
         - (new AKS) wo-setup-woready-aks-cls
         - (new AKS) wo-setup-woready-allinone-aks-cls
-        - wo-setup-svgrps-targets
         - wo-setup-svgrps
         - wo-setup-targets
-        - wo-delete-targets-svgrps
         - wo-delete-targets
         - wo-delete-svgrps
         - wo-delete-aks-conn-cls
@@ -63,7 +61,7 @@ permissions:
 
 jobs:
 
-  action-validate:
+  input-validation:
     runs-on: ubuntu-latest
 
     steps:
@@ -71,18 +69,18 @@ jobs:
       if: ${{ github.event.inputs.action != 'none' && github.event.inputs.sites == 'none' }}
       run: |
         echo " *** INPUT ERROR *** Missing site."
-        echo " --> Please re-run worklow with all inputs"
+        echo " --> Please re-run worklow with correct inputs"
         exit 1
 
     - name: validate action inputs
-      if: ${{ github.event.inputs.action == 'none' && github.event.inputs.sites != 'none' }}
+      if: ${{ github.event.inputs.action == 'none' && github.event.inputs.sites != 'none' && github.event.inputs.commands == 'no action' }}
       run: |
         echo " *** INPUT ERROR *** Missing action."
-        echo " --> Please re-run worklow with all inputs"
+        echo " --> Please re-run worklow with correct inputs"
         exit 1
 
   call-wo-setuponly-arc-conn-cls:
-    if: ${{ github.event.inputs.action == '(AzArc connected) wo-setup-woready-arc-cls' && github.event.inputs.sites != 'none' }}
+    if: ${{ github.event.inputs.action == '(** AzArc connected **) wo-setup-woready-arc-cls' && github.event.inputs.sites != 'none' }}
     uses: ./.github/workflows/wo-setup-woready-arc-conn-cls-reusable.yml
     with:
       site: ${{ github.event.inputs.sites }}
@@ -93,7 +91,7 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   call-wo-setuponly-aks-conn-cls:
-    if: ${{ github.event.inputs.action == '(new AKS) wo-setup-woready-aks-cls' && github.event.inputs.sites != 'none' }}
+    if: ${{ github.event.inputs.action == '(** new AKS **) wo-setup-woready-aks-cls' && github.event.inputs.sites != 'none' }}
     uses: ./.github/workflows/wo-setup-woready-aks-conn-cls-reusable.yml
     with:
       site: ${{ github.event.inputs.sites }}
@@ -104,7 +102,7 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   call-wo-all-in-one-aks-conn-cls:
-     if: ${{ github.event.inputs.action == '(new AKS) wo-setup-woready-allinone-aks-cls' && github.event.inputs.sites != 'none' }}
+     if: ${{ github.event.inputs.action == '(** new AKS **) wo-setup-woready-allinone-aks-cls' && github.event.inputs.sites != 'none' }}
      uses: ./.github/workflows/wo-all-in-one-aks-woready-cls-reuasable.yml
      with:
        site: ${{ github.event.inputs.sites }}
@@ -191,6 +189,17 @@ jobs:
        site: ${{ github.event.inputs.sites }}
        rg: ${{ github.event.inputs.usesiterg }}
 
+
+  call-wo-sanity-check:
+     if: ${{ github.event.inputs.commands == 'sanity' && github.event.inputs.sites != 'none' }}
+     uses: ./.github/workflows/wo-sanity-reuasable.yml
+     with:
+       site: ${{ github.event.inputs.sites }}
+       rg: ${{ github.event.inputs.usesiterg }}
+     secrets:
+       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
   action-none:
     if: ${{ github.event.inputs.action == 'none' && github.event.inputs.sites == 'none' }}

@@ -29,20 +29,6 @@ runs:
         aksName=$(az aks show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name -o tsv 2>&1) || true
         echo "aksName is : $aksName"
 
-        # exit_code=$?
-        # echo "exit code: $exit_code"
-        # echo "aksName: $aksName"
-
-        # if [[ $exit_code -eq 0 ]] && echo "$aksName" | grep -Eq "ResourceNotFound|InvalidApiVersionParameter|No HTTP|InvalidAPI|NoneType"; then
-        #   echo "cluster does not exist.creating ... "
-        #   akscls="false"
-        #   akscon="false"
-        # else
-        #   echo "CLUSTER already exists"
-        #   echo
-        #   exit 0
-        # fi
-
         if [[ "$aksName" == "${{ steps.siteinfo.outputs.siteClsName }}" ]]; then
           echo " cluster $aksName already exists. nothing to do."
           akscls="true"

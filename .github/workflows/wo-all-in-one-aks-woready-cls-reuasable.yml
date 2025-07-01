@@ -62,7 +62,7 @@ jobs:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
 
-    - name: Check for WO readiness
+    - name: Check for w-o readiness
       id: check-wo-ready
       uses: ./.github/actions/wo-check-woready-cluster
       with:
@@ -93,31 +93,3 @@ jobs:
       with:
         site: ${{ inputs.sites }}
         rg: ${{ inputs.rg }}
-
-    - name: Delete targets
-      uses: ./.github/actions/wo-delete-targets
-      with:
-        site: ${{ inputs.sites }}
-        rg: ${{ inputs.rg }}
-
-    - name: check for target-svgrp associations
-      if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
-      id: check-svctar
-      uses: ./.github/actions/wo-check-svc-tar
-      with:
-        site: ${{ inputs.sites }}
-        rg: ${{ inputs.rg }}
-
-    - name: Delete service groups if no assoc. targets found
-      if: ${{ steps.check-svctar.outputs.svcfound == 'false' }}
-      uses: ./.github/actions/wo-delete-svgrps
-      with:
-        site: ${{ inputs.site }}
-        rg: ${{ inputs.rg }}
-
-    - name: Delete aks connected cluster
-      id: wo-delete-aks-conn-cluster
-      uses: ./.github/actions/wo-delete-aks-conn-cluster
-      with:
-       site: ${{ github.event.inputs.sites }}
-       rg: ${{ github.event.inputs.usesiterg }}
