@@ -21,6 +21,10 @@ runs:
       site: ${{ inputs.site }}
       rg: ${{ inputs.rg }}
 
+  - name: install wo cli extn
+    id: woextn
+    uses: ./.github/actions/wo-install-wo-extn
+
   - name: check for SG association
     id: checksvctar
     shell: bash
@@ -36,7 +40,10 @@ runs:
      
         echo "Target being checked: $target_name in RG $wfrg"
 
+        echo "Getting targetId ..."
         targetId=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query id --output tsv 2>/dev/null)
+        echo "$targetId"
+
         if [[ -z "$targetId" ]]; then
           echo "Target $target_name does not exist in RG $wfrg. Skipping deletion."
           return
