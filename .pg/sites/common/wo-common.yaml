@@ -1,8 +1,10 @@
 common:
   tenantId: "72f988bf-86f1-41af-91ab-2d7cd011db47"
   subscriptionId: "d1e52cbc-b073-42e2-a0a0-c2f547118a6e"
-  rg: "jn-wo-ghawfs"
-  location: "eastus2"
+  ## rg: "jn-wo-ghawfs"
+  ## location: "eastus2"
+  rg: "jiadutkg0605"
+  location: "eastus2euap"
 
 context:
   contextRG: "Mehoopany"
@@ -12,7 +14,7 @@ context:
   contextSubscriptionId: "973d15c6-6c57-447e-b9c6-6d79b5b784ab"
 
 sites:
-  siteList: "albany,bethel,canton,denver"
+  siteList: "albany,bethel,canton,denver,tanzu"
  
 hierarchy:
   levels: "Factory,Line"

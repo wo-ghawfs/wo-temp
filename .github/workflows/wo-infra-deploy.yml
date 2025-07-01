@@ -44,6 +44,7 @@ on:
         - bethel
         - canton
         - denver
+        - tanzu
         required: true
       commands:
         type: string

@@ -1,0 +1,25 @@
+target:
+  tanzu:
+  # - name: "tnz-ct-1"
+  #   level: "country"
+  #   caps: ["azure-soap","azure-shampoo"]
+  #   scope: "wotxpga"
+  #   spec: "targetspecs.json"
+
+  # - name: "tnz-rg-1"
+  #   level: "region"
+  #   caps: ["azure-soap","azure-shampoo"]
+  #   scope: "wotxpga"
+  #   spec: "targetspecs.json"
+
+  - name: "tnz-ft-1"
+    level: "factory"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"
+
+  - name: "tnz-li-1"
+    level: "line"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"
