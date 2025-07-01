@@ -1,6 +1,6 @@
 metadata:
   name: common-config-template
-  version: 1.0.0
+  version: 1.0.0 
 schema:
   name: common-schema
   version: 1.0.0

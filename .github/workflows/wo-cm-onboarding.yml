@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - main
-    paths: ['.pg/**/workload-orchestration/**']
+    paths: 
+      - '.pg/**/workload-orchestration/**'
+      - '.pg/apps/common/**'
 
   workflow_dispatch:
     inputs:
