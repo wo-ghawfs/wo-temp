@@ -52,6 +52,10 @@ runs:
         woready="false"
 
 
+        # echo "get aks credentials ..."
+        # az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }}
+        # kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
+
         echo "CHECK IF THIS IS A CONNECTED CLUSTER"
         echo "usingrg: ${{ steps.siteinfo.outputs.rg }} and inputrg: ${{ inputs.rg }}"
         aksctd=$(az connectedk8s show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name -o tsv 2>&1) || true
