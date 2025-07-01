@@ -7,6 +7,10 @@ on:
     paths: 
       - '.pg/**/workload-orchestration/**'
       - '.pg/apps/common/**'
+  workflow_run:
+      workflows: ["WO-SYNC-VERSIONS"]
+      types:
+        - completed
 
   workflow_dispatch:
     inputs:
