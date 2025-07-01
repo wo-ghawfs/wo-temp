@@ -42,22 +42,20 @@ runs:
 
         echo "Getting targetId ..."
        
-        targetId=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query id --output tsv 2>&1) || true
-        exit_code=$?
-        echo "exit code: $exit_code"
-        echo "targetid: $targetId"
+        targetN=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query name --output tsv 2>&1) || true
 
-        # if [[ -z "$targetId" ]]; then
-        if [[ -z "$targetId" || "$targetId" == "null" ]]; then
+        # if [[ -z "$targetId" || "$targetId" == "null" ]]; then
+        if [[ "$targetN" == "$target_name" ]]; then
+          echo "Finding svcgrp association with $target_name ..."
+          targetId=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query id --output tsv 2>&1) || true
+          svcfnd=$(az rest --method get --url "$targetId/providers/Microsoft.Relationships/serviceGroupMember/SGRelation?api-version=2023-09-01-preview" --query id -o tsv)
+          if [[ "$svcfnd" != "null" ]]; then
+            sg_assoc="true"
+          fi   
+        else
           echo "Target $target_name does not exist in RG $wfrg. Skipping deletion."
           return
         fi
-
-        echo "Finding svcgrp association with $target_name ..."
-        svcfnd=$(az rest --method get --url "$targetId/providers/Microsoft.Relationships/serviceGroupMember/SGRelation?api-version=2023-09-01-preview" --query id -o tsv)
-        if [[ "$svcfnd" != "null" ]]; then
-          sg_assoc="true"
-        fi   
       }
 
       numTar=$(yq ".target.${{ inputs.site }} | length" .pg/sites/${{ inputs.site }}/target.yaml)
