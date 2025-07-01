@@ -113,16 +113,16 @@ graph TD
 
 ```mermaid
 graph TD
-    A[Push to main/.pg/**] --> B[Detect Apps to Deploy]
+    A[Push to main/.pg/**] --> B[Detect Apps to Update]
     C[Manual Trigger w/Options] --> B
-    B --> |Matrix Strategy| D[Deploy Job Per App]
+    B --> |Matrix Strategy| D[Update Job Per App]
     D --> E[Azure Login]
     E --> F[Install WO Extension]
     F --> G[Get App Files]
     
     subgraph File Processing
         G --> H[Check Changed Files]
-        H --> I{Deployment Type}
+        H --> I{Update Type}
         I -->|Schema| J[Create/Update Schema]
         I -->|Template| K[Create/Update Solution Template]
     end
@@ -208,18 +208,18 @@ graph TB
     end
 ```
 
-## Deployment Process
+## Update Process
 
 ### 1. App Detection and Validation
 
 - **Push Event**: 
   - Extracts app names from changed file paths (`.pg/<app>/workload-orchestration/`)
-  - Creates a list of unique apps to deploy
+  - Creates a list of unique apps to update
   - Changed files determine which actions to take
 
 - **Manual Event**:
   - Validates provided app list against directory structure
-  - Action type determines which components to deploy
+  - Action type determines which components to update
   - Processes all files for selected apps regardless of changes
 
 ### 2. Azure Login
@@ -230,7 +230,7 @@ graph TB
   - `AZURE_SUBSCRIPTION_ID`
 
 ### 3. File Processing
-For each app to deploy:
+For each app to update:
 
 1. **Get Files**:
    - Locates required files in app's workload-orchestration directory
@@ -263,7 +263,7 @@ For each app to deploy:
 
 1. **Schema Version Check**:
    - Verifies schema version exists before creating solution template
-   - Fails deployment if required schema version is missing
+   - Fails the operation if required schema version is missing
 
 2. **File Validation**:
    - Validates file existence before processing
@@ -286,8 +286,8 @@ For each app to deploy:
    - Keep schema and solution template versions in sync
 
 3. **Manual Triggers**:
-   - Use for selective deployment of specific components
-   - Helpful for redeploying configurations without changes
+   - Use for selective updates of specific components
+   - Helpful for updating configurations without changes
    - Choose appropriate action type for your needs
 
 ## Troubleshooting

@@ -14,9 +14,9 @@ on:
 
   workflow_dispatch:
     inputs:
-      deploy_common:
+      update_common:
         type: choice
-        description: 'Choose what common resources to deploy'
+        description: 'Choose what common resources to update'
         default: none
         options:
         - none
@@ -26,7 +26,7 @@ on:
         required: true
       action:
         type: choice
-        description: Choose app resources to deploy
+        description: Choose app resources to update
         default: none
         options:
         - none
@@ -36,7 +36,7 @@ on:
         required: true
       apps:
         type: string
-        description: 'Comma-separated list of apps to deploy (e.g., testapp1,testapp2)'
+        description: 'Comma-separated list of apps to update (e.g., testapp1,testapp2)'
         default: null
 
 permissions:
@@ -44,7 +44,7 @@ permissions:
   contents: write # for actions/checkout
 
 jobs:
-  detect-apps-to-deploy:
+  detect-apps-resources-to-update:
     runs-on: ubuntu-latest
     outputs:
       apps: ${{ github.event_name == 'workflow_dispatch' && steps.app-list-dispatch.outputs.apps || steps.app-list.outputs.apps }}
@@ -76,11 +76,11 @@ jobs:
                  jq -R -s -c 'split("\n")[:-1]')
           echo "apps=$APPS" >> $GITHUB_OUTPUT
 
-      - name: Extract and validate apps for deployment
+      - name: Extract and validate apps for update
         if: github.event_name == 'workflow_dispatch'
         id: app-list-dispatch
         run: |
-          echo "Validating apps from input list..."
+          echo "Validating apps from input list for update..."
           APPS_INPUT="${{ github.event.inputs.apps }}"
           
           # Handle empty or whitespace-only input
@@ -112,9 +112,9 @@ jobs:
           echo "apps=$APPS" >> $GITHUB_OUTPUT
           echo "✅ Final app list: $APPS"
 
-  deploy-apps:
-    needs: detect-apps-to-deploy
-    if: ${{ needs.detect-apps-to-deploy.outputs.apps != '[]' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none') }}
+  update-wo-artifacts:
+    needs: detect-apps-resources-to-update
+    if: ${{ needs.detect-apps-resources-to-update.outputs.apps != '[]' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none') }}
     runs-on: ubuntu-latest
     env:
       AZURE_RESOURCE_GROUP: 'cm-resources'
@@ -123,7 +123,7 @@ jobs:
       fail-fast: false
       max-parallel: 4  # Limit to 4 concurrent jobs
       matrix:
-        app_name: ${{ fromJson(needs.detect-apps-to-deploy.outputs.apps) }}
+        app_name: ${{ fromJson(needs.detect-apps-resources-to-update.outputs.apps) }}
     
     steps:
       - name: Azure Login with OIDC
@@ -195,8 +195,8 @@ jobs:
             echo "::warning::Metadata file not found in $BASE_PATH"
           fi
 
-      - name: Set deployment flags
-        id: deployment-flags
+      - name: Set update flags
+        id: update-flags
         run: |
           # Initialize flags
           CREATE_SCHEMA="false"
@@ -234,7 +234,7 @@ jobs:
           echo "Set flags: schema=$CREATE_SCHEMA, template=$CREATE_TEMPLATE"
 
       - name: Create App Schema
-        if: steps.deployment-flags.outputs.create_schema == 'true'
+        if: steps.update-flags.outputs.create_schema == 'true'
         uses: ./.github/actions/wo-create-schema
         with:
           app-name: ${{ matrix.app_name }}
@@ -244,7 +244,7 @@ jobs:
           schema-file: ${{ steps.get-files.outputs.schema_file }}
 
       - name: Create App Solution Template
-        if: steps.deployment-flags.outputs.create_template == 'true'
+        if: steps.update-flags.outputs.create_template == 'true'
         uses: ./.github/actions/wo-create-solution-template
         with:
           app-name: ${{ matrix.app_name }}
@@ -255,8 +255,8 @@ jobs:
           specification-file: ${{ steps.get-files.outputs.specs_file }}
           metadata-file: ${{ steps.get-files.outputs.metadata_file }}
 
-  deploy-common-resources:
-    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.deploy_common != 'none' }}
+  update_common_resources:
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.update_common != 'none' }}
     runs-on: ubuntu-latest
     env:
       AZURE_RESOURCE_GROUP: 'cm-resources'
@@ -306,44 +306,44 @@ jobs:
         with:
           files: .pg/apps/common/*
 
-      - name: Set deployment flags
-        id: deployment-flags
+      - name: Set update flags
+        id: update-flags
         run: |
           # Initialize flags
-          DEPLOY_COMMON_SCHEMA="false"
-          DEPLOY_COMMON_CONFIG="false"
+          UPDATE_COMMON_SCHEMA="false"
+          UPDATE_COMMON_CONFIG="false"
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # For manual runs, check deploy_common input
-            case "${{ github.event.inputs.deploy_common }}" in
+            # For manual runs, check update_common input
+            case "${{ github.event.inputs.update_common }}" in
               "schema-only"|"all")
-                DEPLOY_COMMON_SCHEMA="true"
+                UPDATE_COMMON_SCHEMA="true"
                 ;;
             esac
-            case "${{ github.event.inputs.deploy_common }}" in
+            case "${{ github.event.inputs.update_common }}" in
               "config-only"|"all")
-                DEPLOY_COMMON_CONFIG="true"
+                UPDATE_COMMON_CONFIG="true"
                 ;;
             esac
           else
             # For push events, check changed files
             if [[ $(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -c ".pg/apps/common/common-schema.yaml") -gt 0 ]]; then
-              DEPLOY_COMMON_SCHEMA="true"
+              UPDATE_COMMON_SCHEMA="true"
             fi
             if [[ $(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -c ".pg/apps/common/common-config-template.yaml") -gt 0 ]]; then
-              DEPLOY_COMMON_CONFIG="true"
+              UPDATE_COMMON_CONFIG="true"
             fi
           fi
 
           # Set outputs
-          echo "deploy_schema=$DEPLOY_COMMON_SCHEMA" >> $GITHUB_OUTPUT
-          echo "deploy_config=$DEPLOY_COMMON_CONFIG" >> $GITHUB_OUTPUT
+          echo "update_schema=$UPDATE_COMMON_SCHEMA" >> $GITHUB_OUTPUT
+          echo "update_config=$UPDATE_COMMON_CONFIG" >> $GITHUB_OUTPUT
 
           # Echo final status using local variables
-          echo "Set flags: schema=$DEPLOY_COMMON_SCHEMA, template=$DEPLOY_COMMON_CONFIG"
+          echo "Set flags: schema=$UPDATE_COMMON_SCHEMA, template=$UPDATE_COMMON_CONFIG"
 
       - name: Create Common Schema
-        if: steps.deployment-flags.outputs.deploy_schema == 'true'
+        if: steps.update-flags.outputs.update_schema == 'true'
         uses: ./.github/actions/wo-create-schema
         with:
           app-name: common
@@ -353,7 +353,7 @@ jobs:
           schema-file: ${{ steps.get-files.outputs.schema_file }}
 
       - name: Create Common Config Template
-        if: steps.deployment-flags.outputs.deploy_config == 'true'
+        if: steps.update-flags.outputs.update_config == 'true'
         uses: ./.github/actions/wo-create-config-template
         with:
           azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
