@@ -108,7 +108,7 @@ jobs:
 
   deploy-apps:
     needs: detect-apps-to-deploy
-    if: ${{ needs.detect-apps-to-deploy.outputs.apps != '[]' && needs.detect-apps-to-deploy.outputs.should_run == 'true' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none') }}
+    if: ${{ needs.detect-apps-to-deploy.outputs.apps != '[]' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none') }}
     runs-on: ubuntu-latest
     env:
       AZURE_RESOURCE_GROUP: 'cm-resources'
@@ -251,7 +251,7 @@ jobs:
 
   deploy-common-resources:
     needs: detect-apps-to-deploy
-    if: ${{ (github.event_name != 'workflow_dispatch' && needs.detect-apps-to-deploy.outputs.should_run == 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_common != 'none') }}
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.deploy_common != 'none' }}
     runs-on: ubuntu-latest
     env:
       AZURE_RESOURCE_GROUP: 'cm-resources'
