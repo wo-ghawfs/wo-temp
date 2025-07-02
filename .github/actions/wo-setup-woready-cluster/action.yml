@@ -117,14 +117,19 @@ runs:
         echo " show current context ..."
         export KUBECONFIG="$HOME/.kube/config"
 
-        # echo "get aks credentials ..."
-        # az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }}
-        # kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
+        # only for AKS clusters
+        if [[ ${{ inputs.akscls }} == 'true' ]]; then
+        
+          echo "get aks credentials ..."
+          az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }}
+          kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
 
-        # echo 
-        # echo " enable-features ...."
-        # az connectedk8s enable-features -n ${{ steps.siteinfo.outputs.siteClsName }} -g ${{ steps.siteinfo.outputs.rg }} --subscription ${{ steps.siteinfo.outputs.subId }} \
-        #                                --custom-locations-oid ${{ steps.custLocOid.outputs.sp-cl-oid }} --features cluster-connect custom-locations
+          echo 
+          echo " enable-features ...."
+          az connectedk8s enable-features -n ${{ steps.siteinfo.outputs.siteClsName }} -g ${{ steps.siteinfo.outputs.rg }} --subscription ${{ steps.siteinfo.outputs.subId }} \
+                                         --custom-locations-oid ${{ steps.custLocOid.outputs.sp-cl-oid }} --features cluster-connect custom-locations
+
+        fi
 
         echo 
         echo " customlocation create ...."
