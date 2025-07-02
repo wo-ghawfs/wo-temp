@@ -81,10 +81,19 @@ runs:
       id: connectedclusterproxy
       shell: bash
       run: |
-        # echo "get connectedcluster proxy ..."
+        echo "get connectedcluster proxy ..."
         az connectedk8s proxy --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }} &
         sleep 30 # Give the proxy time to start
         export KUBECONFIG="$HOME/.kube/config"
+
+    - name: execute kubectl
+      shell: bash
+      run: |
+        echo "kubectl commands ..."
+        export KUBECONFIG="$HOME/.kube/config"
+        kubectl config current-context
+        kubectl get po -n azure-arc
+        kubectl get deployment -A
 
     - name: Grant RBAC for secret list permissions
       shell: bash
@@ -98,9 +107,9 @@ runs:
         - apiGroups: [""]
           resources: ["secrets"]
           verbs: ["get", "list", "watch"]
-        - apiGroups: ["rbac.authorization.k8s.io"]
-          resources: ["clusterroles", "clusterrolebindings"]
-          verbs: ["get", "list", "watch"]
+        # - apiGroups: ["rbac.authorization.k8s.io"]
+        #   resources: ["clusterroles", "clusterrolebindings"]
+        #   verbs: ["get", "list", "watch"]
         # ---
         # apiVersion: rbac.authorization.k8s.io/v1
         # kind: ClusterRoleBinding
@@ -150,11 +159,10 @@ runs:
         # set kubeconfig context
         echo " show current context ..."
         export KUBECONFIG="$HOME/.kube/config"
-        kubectl config get-contexts
 
         # echo "get aks credentials ..."
         # az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }}
-        kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
+        # kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
 
         echo 
         echo " enable-features ...."
