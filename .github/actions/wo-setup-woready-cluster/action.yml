@@ -97,10 +97,10 @@ runs:
         rules:
         - apiGroups: [""]
           resources: ["secrets"]
-          verbs: ["get", "list"]
+          verbs: ["get", "list", "watch"]
         - apiGroups: ["rbac.authorization.k8s.io"]
           resources: ["clusterroles", "clusterrolebindings"]
-          verbs: ["get", "list"]
+          verbs: ["get", "list", "watch"]
         # ---
         # apiVersion: rbac.authorization.k8s.io/v1
         # kind: ClusterRoleBinding
