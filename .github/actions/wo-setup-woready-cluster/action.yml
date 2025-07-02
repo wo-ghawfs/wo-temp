@@ -82,8 +82,7 @@ runs:
       shell: bash
       run: |
         # echo "get connectedcluster proxy ..."
-        az connectedk8s proxy --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }}
-
+        az connectedk8s proxy --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }} &
 
     - name: create and enable customelocation for cluster
       id: custloc
