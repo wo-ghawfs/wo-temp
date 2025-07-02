@@ -92,8 +92,8 @@ runs:
         echo "kubectl commands ..."
         export KUBECONFIG="$HOME/.kube/config"
         kubectl config current-context
-        kubectl get po -n azure-arc
-        kubectl get deployment -A
+        # kubectl get po -n azure-arc
+        # kubectl get deployment -A
 
     - name: create and enable customelocation for cluster
       id: custloc
