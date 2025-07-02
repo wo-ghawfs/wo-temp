@@ -84,8 +84,8 @@ runs:
         # echo "get connectedcluster proxy ..."
         az connectedk8s proxy --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }} &
         sleep 30 # Give the proxy time to start
+        ls -alrt $HOME/.kube/config
         export KUBECONFIG="$HOME/.kube/config"
-        ls -alrt .kube/config
 
     - name: create and enable customelocation for cluster
       id: custloc
