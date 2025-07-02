@@ -124,8 +124,9 @@ runs:
         # echo 
         # echo " enable-features ...."
         # az connectedk8s enable-features -n ${{ steps.siteinfo.outputs.siteClsName }} -g ${{ steps.siteinfo.outputs.rg }} --subscription ${{ steps.siteinfo.outputs.subId }} \
-                                        --custom-locations-oid ${{ steps.custLocOid.outputs.sp-cl-oid }} --features cluster-connect custom-locations
-        # echo 
+        #                                --custom-locations-oid ${{ steps.custLocOid.outputs.sp-cl-oid }} --features cluster-connect custom-locations
+
+        echo 
         echo " customlocation create ...."
         az customlocation create --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.sitecusLocName }} \
                                  --namespace default --host-resource-id ${{ steps.extension.outputs.clusterId }} \
