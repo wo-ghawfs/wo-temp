@@ -112,7 +112,6 @@ runs:
         echo " show current context ..."
         export KUBECONFIG="$HOME/.kube/config"
         kubectl config get-contexts
-        kubectl get po -A
 
         echo 
         echo " enable-features ...."
