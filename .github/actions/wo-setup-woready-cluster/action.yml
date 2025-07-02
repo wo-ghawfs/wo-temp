@@ -45,7 +45,8 @@ runs:
         echo " "
         echo "INSTALL aio-certmgr manager extension"
         az k8s-extension create --resource-group ${{ steps.siteinfo.outputs.rg }} --cluster-name ${{ steps.siteinfo.outputs.siteClsName }} --name "aio-certmgr" \
-                                --cluster-type connectedClusters --extension-type microsoft.iotoperations.platform --scope cluster --release-namespace cert-manager
+                                --cluster-type connectedClusters --extension-type microsoft.iotoperations.platform --scope cluster --release-namespace cert-manager \
+                                --subscription ${{ steps.siteinfo.outputs.subId }}
 
     - name: install workloadorchestration extension
       if: ${{ inputs.woextn == 'false' }}
