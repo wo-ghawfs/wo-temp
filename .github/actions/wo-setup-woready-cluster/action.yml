@@ -86,6 +86,32 @@ runs:
         sleep 30 # Give the proxy time to start
         export KUBECONFIG="$HOME/.kube/config"
 
+    - name: Grant secret list permissions
+      run: |
+        kubectl apply -f - <<EOF
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRole
+        metadata:
+          name: secret-reader
+        rules:
+        - apiGroups: [""]
+          resources: ["secrets"]
+          verbs: ["get", "list"]
+        ---
+        apiVersion: rbac.authorization.k8s.io/v1
+        kind: ClusterRoleBinding
+        metadata:
+          name: read-secrets-global
+        subjects:
+        - kind: ServiceAccount
+          name: default
+          namespace: default
+        roleRef:
+          kind: ClusterRole
+          name: secret-reader
+          apiGroup: rbac.authorization.k8s.io
+        EOF
+
     - name: create and enable customelocation for cluster
       id: custloc
       shell: bash
