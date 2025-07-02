@@ -62,10 +62,10 @@ jobs:
         rg: ${{ inputs.rg }}
         siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
-    -name: Indicate non-AKS cluster
-     id: clustertype
-     shell: bash
-     run: akscls="false"
+    - name: Indicate non-AKS cluster
+      id: clustertype
+      shell: bash
+      run: akscls="false"
 
     - name: Create w-o ready cluster
       if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
