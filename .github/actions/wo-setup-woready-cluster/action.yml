@@ -95,49 +95,6 @@ runs:
         kubectl get po -n azure-arc
         kubectl get deployment -A
 
-    - name: Grant RBAC for secret list permissions
-      shell: bash
-      run: |
-        kubectl apply -f - <<EOF
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: ClusterRole
-        metadata:
-          name: github-actions-secret-reader #previously secret-reader
-        rules:
-        - apiGroups: [""]
-          resources: ["secrets"]
-          verbs: ["get", "list", "watch"]
-        # - apiGroups: ["rbac.authorization.k8s.io"]
-        #   resources: ["clusterroles", "clusterrolebindings"]
-        #   verbs: ["get", "list", "watch"]
-        # ---
-        # apiVersion: rbac.authorization.k8s.io/v1
-        # kind: ClusterRoleBinding
-        # metadata:
-        #   name: read-secrets-global
-        # subjects:
-        # - kind: ServiceAccount
-        #   name: default
-        #   namespace: default
-        # roleRef:
-        #   kind: ClusterRole
-        #   name: secret-reader
-        #   apiGroup: rbac.authorization.k8s.io
-        ---
-        apiVersion: rbac.authorization.k8s.io/v1
-        kind: ClusterRoleBinding
-        metadata:
-          name: github-actions-secret-reader
-        subjects:
-          - kind: User
-            name: c050501b-fe45-4bd8-8012-c3dd967c4de7 # The user from the error log
-            apiGroup: rbac.authorization.k8s.io
-        roleRef:
-          kind: ClusterRole
-          name: github-actions-secret-reader # previously cluster-admin secret-reader
-          apiGroup: rbac.authorization.k8s.io
-        EOF
-
     - name: create and enable customelocation for cluster
       id: custloc
       shell: bash
@@ -164,11 +121,11 @@ runs:
         # az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }}
         # kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
 
-        echo 
-        echo " enable-features ...."
-        az connectedk8s enable-features -n ${{ steps.siteinfo.outputs.siteClsName }} -g ${{ steps.siteinfo.outputs.rg }} --subscription ${{ steps.siteinfo.outputs.subId }} \
+        # echo 
+        # echo " enable-features ...."
+        # az connectedk8s enable-features -n ${{ steps.siteinfo.outputs.siteClsName }} -g ${{ steps.siteinfo.outputs.rg }} --subscription ${{ steps.siteinfo.outputs.subId }} \
                                         --custom-locations-oid ${{ steps.custLocOid.outputs.sp-cl-oid }} --features cluster-connect custom-locations
-        echo 
+        # echo 
         echo " customlocation create ...."
         az customlocation create --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.sitecusLocName }} \
                                  --namespace default --host-resource-id ${{ steps.extension.outputs.clusterId }} \
