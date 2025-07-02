@@ -95,9 +95,9 @@ runs:
         fi
         
         # create customlocation and return custLocId
-        echo "get aks credentials ..."
-        az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }}
-        kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
+        # echo "get aks credentials ..."
+        # az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }}
+        # kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
 
         echo 
         echo " enable-features ...."
