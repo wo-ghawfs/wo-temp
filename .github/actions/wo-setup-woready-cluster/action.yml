@@ -77,6 +77,14 @@ runs:
       run: |
         echo "sp-cl-oid=51dfe1e8-70c6-4de5-a08e-e18aff23d815" >> $GITHUB_OUTPUT
 
+    - name: setup connectedcluster proxy
+      id: connectedclusterproxy
+      shell: bash
+      run: |
+        # echo "get connectedcluster proxy ..."
+        az connectedk8s proxy --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }}
+
+
     - name: create and enable customelocation for cluster
       id: custloc
       shell: bash
