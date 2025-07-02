@@ -1,7 +1,9 @@
 site:
-  siteRG:                       "jiadutkg0605"
+  # siteRG:                       "jiadutkg0605"
+  siteRG:                       "jn-ghawf-euap"
   aksLocation: 			"eastus2euap"
-  aksClusterName: 		"jiadutkg0605"
+  aksClusterName: 		"wom-tkgm-clu3-test5"
+  # aksClusterName: 		"jiadutkg0605"
   aksClusterIdentity: 		"wf-tanzu-clsId"
   customLocationRG: 		"jiadutkg0605"
   customLocationName: 		"maestrocustest"
