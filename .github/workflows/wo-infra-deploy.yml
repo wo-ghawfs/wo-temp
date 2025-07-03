@@ -15,7 +15,7 @@
 #------------------------------------------------------------------------
 
 name: wo-infra-deploy
-run-name: "> ${{ github.event.inputs.sites }}::${{ github.event.inputs.action }}::${{ github.event.inputs.commands }}"
+run-name: ">${{ github.event.inputs.sites }} >${{ github.event.inputs.action }} >${{ github.event.inputs.commands }}"
 
 on:
   workflow_dispatch:

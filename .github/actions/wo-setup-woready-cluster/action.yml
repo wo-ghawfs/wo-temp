@@ -118,7 +118,7 @@ runs:
         export KUBECONFIG="$HOME/.kube/config"
 
         # only for AKS clusters
-        if [[ ${{ inputs.akscls }} == 'true' ]]; then
+        if [[ "${{ inputs.akscls }}" == "true" ]]; then
         
           echo "get aks credentials ..."
           az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --subscription ${{ steps.siteinfo.outputs.subId }}
