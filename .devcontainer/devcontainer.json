@@ -10,13 +10,5 @@
     "ms-kubernetes-tools.vscode-kubernetes-tools", // Kubernetes Tools
     "redhat.vscode-yaml",                     // YAML
     "ms-vscode.powershell"                    // PowerShell
-  ],
-  "secrets": {
-    "AZURE_CLIENT_ID": {
-      "description": "To enable Actions to communicate with Azure, you must create a UAMI & created federated credentials. Add the clientId as a secret.",
-      "documentationUrl": "https://learn.microsoft.com/en-us/azure/developer/github/connect-from-azure-identity#use-the-azure-login-action-with-user-assigned-managed-identity"
-    },
-    "AZURE_SUBSCRIPTION_ID": { },
-    "AZURE_TENANT_ID": { }
-  }
+  ]
 }
