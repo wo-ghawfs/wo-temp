@@ -10,11 +10,76 @@ This repository contains GitHub Actions workflows that automate various Azure Ar
 - **wo_syncversion**: automates the sync'ing version of wo artifacts with the application Helm Chart version
 - **wo_pullreq**: automates the process of identifying all the changed files in a pull-request and optionally validating them
 
+## Initial Setup
+
+Before using these workflows, you need to configure Azure authentication using a User-Assigned Managed Identity (UAMI) and federated identity credentials.
+
+### 🔐 Configure Federated Identity Credential for GitHub Actions (Azure Portal)
+
+This guide walks you through configuring a **federated identity credential** in the **Azure Portal** so your GitHub Actions workflows can authenticate to Azure using a **User-Assigned Managed Identity (UAMI)** — without storing secrets.
+
+> Based on [Microsoft Learn documentation](https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation-create-trust-user-assigned-managed-identity)
+
+#### Prerequisites
+
+- An existing **User-Assigned Managed Identity (UAMI)** in Azure
+- A GitHub repository
+- Access to the **Azure Portal**
+- Contributor or Owner access to relevant Azure resources
+
+#### Step-by-Step Instructions
+
+##### 1. Open the Managed Identity in Azure Portal
+
+1. Go to [https://portal.azure.com](https://portal.azure.com)
+2. In the top search bar, type **User assigned identities**
+3. Select your UAMI from the list
+
+#####  2. Add a Federated Identity Credential
+
+1. In the UAMI's left-hand Settings menu, click **Federated credentials**
+2. Click **+ Add credential**
+3. Fill in the required fields:
+
+| Field | Value |
+|-------|-------|
+| **Federated credential scenario** | Github Actions deploying Azure resources
+| **Issuer** | `https://token.actions.githubusercontent.com` |
+| **Subject identifier** | `repo:<OWNER>/<REPO>:ref:refs/heads/<BRANCH>` <br> Automatically set when Git account details are provided. |
+| **Name** | `github-actions` or something descriptive |
+| **Audience** | `api://AzureADTokenExchange` (default) |
+
+4. Click **Add**
+
+> You can create multiple credentials for different repos or branches.
+
+##### 3. Assign Azure Role to the UAMI
+
+1. Navigate to the Azure **resource** or **resource group** your workflow will access
+2. Open **Access control (IAM)** → Click **+ Add > Add role assignment**
+3. Choose a role, select your UAMI, and then click **Save**
+
+#### 🔐 Save GitHub Secrets
+
+To authenticate from your GitHub Actions workflow, you'll need to store the following Azure values as **GitHub repository secrets**.
+
+1. In your repository, go to **Settings**  
+2. Click **Secrets and variables → Actions**
+3. Click **New repository secret**
+4. Add the following secrets:
+
+| Name | How to Find It |
+|------|----------------|
+| `AZURE_CLIENT_ID` | In the UAMI's **Overview → Client ID** |
+| `AZURE_TENANT_ID` | From **Microsoft Entra ID → Overview → Tenant ID** |
+| `AZURE_SUBSCRIPTION_ID` | From **Subscriptions → Overview → Subscription ID** |
+|
+
+> 🔒 Secrets are encrypted and only available to GitHub Actions workflows.
 
 ## Repository Layout
 
 The workflows are configured to work with the following repo folder structure organization
-
 
 ### 
 
