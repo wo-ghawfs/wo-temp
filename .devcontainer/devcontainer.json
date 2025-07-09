@@ -1,14 +1,18 @@
 {
   "name": "Codespace Container",
   "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
-  "extensions": [
-    "GitHub.vscode-github-actions",       // GitHub Actions extension
-    "esbenp.prettier-vscode",             // Prettier for formatting
-    "dbaeumer.vscode-eslint",              // ESLint
-    "ms-vscode.azure-account",              // Azure Account
-    "ms-azuretools.vscode-azureresourcegroups", // Azure Resource Groups
-    "ms-kubernetes-tools.vscode-kubernetes-tools", // Kubernetes Tools
-    "redhat.vscode-yaml",                     // YAML
-    "ms-vscode.powershell"                    // PowerShell
-  ]
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "GitHub.vscode-github-actions",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "ms-vscode.azure-account",
+        "ms-azuretools.vscode-azureresourcegroups",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "redhat.vscode-yaml",
+        "ms-vscode.powershell"
+      ]
+    }
+  }
 }
