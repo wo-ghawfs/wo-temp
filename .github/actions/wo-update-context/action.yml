@@ -7,17 +7,17 @@ runs:
     - name: Read context metadata
       shell: bash
       run: |
-        echo "Reading context metadata from .pg/sites/common/common.yaml..."
-        if [ ! -f ".pg/sites/common/common.yaml" ]; then
-          echo "Error: .pg/sites/common/common.yaml not found"
+        echo "Reading context metadata from .pg/sites/common/wo-common.yaml..."
+        if [ ! -f ".pg/sites/common/wo-common.yaml" ]; then
+          echo "Error: .pg/sites/common/wo-common.yaml not found"
           exit 1
         fi
         
         # Read context parameters from metadata file
-        CONTEXT_SUB=$(yq eval '.context.contextSubscriptionId' .pg/sites/common/common.yaml)
-        CONTEXT_RG=$(yq eval '.context.contextRG' .pg/sites/common/common.yaml)
-        CONTEXT_LOCATION=$(yq eval '.context.contextLocation' .pg/sites/common/common.yaml)
-        CONTEXT_NAME=$(yq eval '.context.contextName' .pg/sites/common/common.yaml)
+        CONTEXT_SUB=$(yq eval '.context.contextSubscriptionId' .pg/sites/common/wo-common.yaml)
+        CONTEXT_RG=$(yq eval '.context.contextRG' .pg/sites/common/wo-common.yaml)
+        CONTEXT_LOCATION=$(yq eval '.context.contextLocation' .pg/sites/common/wo-common.yaml)
+        CONTEXT_NAME=$(yq eval '.context.contextName' .pg/sites/common/wo-common.yaml)
         
         # Export as environment variables for subsequent steps
         echo "CONTEXT_SUB=$CONTEXT_SUB" >> $GITHUB_ENV
@@ -62,20 +62,28 @@ runs:
     - name: Read new capabilities
       shell: bash
       run: |
-        echo "Reading new capabilities from .pg/sites/common/capabilities.json..."
-        if [ ! -f ".pg/sites/common/capabilities.json" ]; then
-          echo "Error: .pg/sites/common/capabilities.json not found"
+        echo "Reading new capabilities from .pg/sites/common/wo-common.yaml..."
+        if [ ! -f ".pg/sites/common/wo-common.yaml" ]; then
+          echo "Error: .pg/sites/common/wo-common.yaml not found"
+          exit 1
+        fi
+        
+        # Extract capabilities from YAML and convert to JSON format
+        yq eval '.capabilities' .pg/sites/common/wo-common.yaml -o json > /tmp/new_capabilities.json
+        
+        # Validate that capabilities exist and are in correct format
+        if [ ! -s /tmp/new_capabilities.json ] || [ "$(cat /tmp/new_capabilities.json)" = "null" ]; then
+          echo "Error: No capabilities found in .pg/sites/common/wo-common.yaml"
           exit 1
         fi
         
         # Validate JSON format
-        if ! jq empty .pg/sites/common/capabilities.json; then
-          echo "Error: Invalid JSON format in .pg/sites/common/capabilities.json"
+        if ! jq empty /tmp/new_capabilities.json; then
+          echo "Error: Invalid JSON format in extracted capabilities"
           exit 1
         fi
         
-        cp .pg/sites/common/capabilities.json /tmp/new_capabilities.json
-        echo "New capabilities loaded successfully"
+        echo "New capabilities loaded successfully from YAML"
 
     - name: Check for new capabilities
       shell: bash
