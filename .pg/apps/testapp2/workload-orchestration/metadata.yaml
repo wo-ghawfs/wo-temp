@@ -1,5 +1,5 @@
 capabilities:
-  - azure-soap
   - azure-shampoo
+  - azure-soap
 description: 'Dummy app 2'
 enable-external-validation: 'true'
