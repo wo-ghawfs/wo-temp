@@ -1,4 +1,4 @@
 capabilities:
-  - e2eTest-factory-Cap-1807
+  - azure-soap
 description: 'Dummy app'
 enable-external-validation: 'true'

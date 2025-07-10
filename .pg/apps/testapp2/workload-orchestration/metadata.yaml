@@ -1,5 +1,5 @@
 capabilities:
-  - e2eTest-factory-Cap-0724
-  - e2eTest-line-Cap-1522
+  - azure-soap
+  - azure-shampoo
 description: 'Dummy app 2'
 enable-external-validation: 'true'
