@@ -56,11 +56,11 @@ runs:
         echo " "
         echo "get aks cluster details"
         # Disable 'errexit' for this line, so script continues even if az fails
-        # aksName=$(az aks show --resource-group "${{ inputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+        # aksName=$(az aks show --resource-group "${{ inputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
         aksName=$(az rest --method get \
                 --resource https://management.azure.com \
-                --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.ContainerService/managedClusters/${{ inputs.siteClsName }}?api-version=2025-04-01" 2>&1) || true
-        # --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ inputs.rg }}/providers/Microsoft.ContainerService/managedClusters/${{ inputs.siteClsName }}?api-version=2025-04-01" 2>&1) || true
+                --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.ContainerService/managedClusters/${{ steps.siteinfo.outputs.siteClsName }}?api-version=2025-04-01" 2>&1) || true
+        # --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ inputs.rg }}/providers/Microsoft.ContainerService/managedClusters/${{ steps.siteinfo.outputs.siteClsName }}?api-version=2025-04-01" 2>&1) || true
     
         exit_code=$?
         echo "exit code: $exit_code"
@@ -91,11 +91,11 @@ runs:
     
         echo "CHECK IF THIS IS A CONNECTED CLUSTER"
         # Disable 'errexit' for this line, so script continues even if az fails
-        # aksctd=$(az connectedk8s show --resource-group "${{ inputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
+        # aksctd=$(az connectedk8s show --resource-group "${{ inputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" 2>&1) || true
         aksctd=$(az rest --method get \
                 --resource https://management.azure.com \
-                --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ inputs.siteClsName }}?api-version=2024-07-01-preview" 2>&1) || true
-        # --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ inputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ inputs.siteClsName }}?api-version=2024-07-01-preview" 2>&1) || true
+                --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}?api-version=2024-07-01-preview" 2>&1) || true
+        # --url "https://management.azure.com/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ inputs.rg }}/providers/Microsoft.Kubernetes/connectedClusters/${{ steps.siteinfo.outputs.siteClsName }}?api-version=2024-07-01-preview" 2>&1) || true
         exit_code=$?
         echo "exit code: $exit_code"
         echo "aksctd: $aksctd"

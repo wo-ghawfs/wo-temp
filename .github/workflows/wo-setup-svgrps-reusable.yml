@@ -1,7 +1,7 @@
 # Resusable workflow to wo-ready a given cluster
-# This workflow will delete svgrps
+# if woready, it will also configure service groups
 
-name: wo-delete-svgrps (Reusable)
+name: wo-setup-svgrps (Reusable)
 
 on:
   workflow_call:
@@ -22,7 +22,7 @@ on:
 
 jobs:
 
-  wo-delete-svgrps-cls:
+  wo-setup-svgrps-cls:
     env:
       site: ${{ inputs.site }}
       rg: ${{ inputs.rg }}
@@ -59,19 +59,9 @@ jobs:
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
-        siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
-    - name: check for target-svgrp associations
+    - name: Create service groups
       if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
-      id: check-svctar
-      uses: ./.github/actions/wo-check-svc-tar
-      with:
-        site: ${{ inputs.sites }}
-        rg: ${{ inputs.rg }}
-
-    - name: Delete service groups if no assoc. targets found
-      if: ${{ steps.check-svctar.outputs.svcfound == 'false' }}
-      uses: ./.github/actions/wo-delete-svgrps
+      uses: ./.github/actions/wo-setup-svgrps
       with:
         site: ${{ inputs.site }}
-        rg: ${{ inputs.rg }}

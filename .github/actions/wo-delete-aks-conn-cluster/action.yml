@@ -31,7 +31,7 @@ runs:
 
           echo "Delete cluster"
           echo "Delete cluster - get credentials ... "
-          az aks get-credentials --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}"
+          az aks get-credentials --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" --overwrite-existing
 
           echo "Delete cluster - delete connectedk8s ... "
           az connectedk8s delete --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" -y

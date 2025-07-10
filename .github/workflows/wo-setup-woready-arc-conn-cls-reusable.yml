@@ -60,7 +60,6 @@ jobs:
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
-        siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
     - name: Indicate non-AKS cluster
       id: clustertype

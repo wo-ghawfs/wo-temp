@@ -1,9 +1,9 @@
-# Resusable workflow to wo-ready a given cluster
-# After verifying cluster connectivity, the workflow
-# will install all the extensions and enable CL
-# It will also configure service groups and targets
+# Resusable sanity check workflow 
+# create woready aks cluster
+# setup and delete svcgrps, targets
+# delete the aks cluster
 
-name: wo-all-in-one-woready-aks-conn-cls (Reusable)
+name: wo-sanity (Reusable)
 
 on:
   workflow_call:
@@ -24,7 +24,7 @@ on:
 
 jobs:
 
-  wo-all-in-one-woready-aks-cls:
+  wo-sanity:
     env:
       site: ${{ inputs.site }}
       rg: ${{ inputs.rg }}
@@ -68,7 +68,6 @@ jobs:
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
-        siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
     - name: Create w-o ready cluster
       if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}
@@ -93,3 +92,31 @@ jobs:
       with:
         site: ${{ inputs.sites }}
         rg: ${{ inputs.rg }}
+
+    - name: Delete targets
+      uses: ./.github/actions/wo-delete-targets
+      with:
+        site: ${{ inputs.sites }}
+        rg: ${{ inputs.rg }}
+
+    - name: check for target-svgrp associations
+      if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
+      id: check-svctar
+      uses: ./.github/actions/wo-check-svc-tar
+      with:
+        site: ${{ inputs.sites }}
+        rg: ${{ inputs.rg }}
+
+    - name: Delete service groups if no assoc. targets found
+      if: ${{ steps.check-svctar.outputs.svcfound == 'false' }}
+      uses: ./.github/actions/wo-delete-svgrps
+      with:
+        site: ${{ inputs.site }}
+        rg: ${{ inputs.rg }}
+
+    - name: Delete aks connected cluster
+      id: wo-delete-aks-conn-cluster
+      uses: ./.github/actions/wo-delete-aks-conn-cluster
+      with:
+       site: ${{ github.event.inputs.sites }}
+       rg: ${{ github.event.inputs.usesiterg }}

@@ -7,9 +7,6 @@ inputs:
   rg:
     description: RG to be used for cluster
     required: true
-  siteClsName:
-    description: site  cluster name
-    required: true
 outputs:
   akscls:
     description: indicates if AKS cluster already exists
@@ -53,15 +50,15 @@ runs:
 
 
         # echo "get aks credentials ..."
-        # az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }}
+        # az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --overwrite-existing
         # kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
 
         echo "CHECK IF THIS IS A CONNECTED CLUSTER"
         echo "usingrg: ${{ steps.siteinfo.outputs.rg }} and inputrg: ${{ inputs.rg }}"
-        aksctd=$(az connectedk8s show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ inputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name -o tsv 2>&1) || true
+        aksctd=$(az connectedk8s show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name -o tsv 2>&1) || true
 
-        if [[ "$aksctd" == "${{ inputs.siteClsName }}" ]]; then
-          echo " ---> CONNECTED CLUSTER verified: ${{ inputs.siteClsName }}"
+        if [[ "$aksctd" == "${{ steps.siteinfo.outputs.siteClsName }}" ]]; then
+          echo " ---> CONNECTED CLUSTER verified: ${{ steps.siteinfo.outputs.siteClsName }}"
           akscon="true"
           akscls="true"
         else

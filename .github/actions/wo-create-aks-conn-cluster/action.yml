@@ -70,7 +70,7 @@ runs:
         echo " "
         echo "ARC-CONNECTED AKS CLUSTER "
         kubectl config current-context
-        az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }}
+        az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --overwrite-existing
         kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
         az connectedk8s connect --resource-group ${{ steps.siteinfo.outputs.rg }} --location "${{ steps.siteinfo.outputs.siteLoc }}" --name ${{ steps.siteinfo.outputs.siteClsName }}
         az connectedk8s enable-features --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --features cluster-connect custom-locations

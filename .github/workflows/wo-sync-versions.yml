@@ -10,8 +10,8 @@ on:
       - '.pg/apps/**/helm/Chart.yaml'
 
 permissions:
-  id-token: write # 
-  contents: write  # for actions/checkout
+  id-token: write
+  contents: write
 
 jobs:    
 

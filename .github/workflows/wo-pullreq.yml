@@ -1,0 +1,57 @@
+# A workflow that is triggered with a pull-request or manual event
+# Controls when the action will run. 
+
+name: WO-PULLREQ
+
+on:
+  pull_request:
+    types:
+      - opened
+    branches:
+      - main
+    paths: 
+      - '.pg/apps/**/workload-orchestration/**'
+
+permissions:
+  id-token: write 
+  contents: write
+  pull-requests: write
+
+jobs:    
+
+  Auto:
+    if: ${{ github.event_name == 'pull_request' && github.event.action == 'opened' }}
+    env:
+      environment: DUMMY
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Azure Login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - name: Checkout 
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 2
+      
+      - name: Get changes
+        id: changed-files
+        run: |
+          echo "changedfiles=$(git diff --name-only HEAD^1 HEAD | xargs)" >> $GITHUB_OUTPUT
+
+      - name: yq
+        uses: mikefarah/yq@3.3.0
+
+      - name: Process changed files
+        run: |
+          for file in ${{ steps.changed-files.outputs.changedfiles }}; do
+            echo "$file was changed and evaluated"
+            yq eval $file >> /dev/null
+            echo 
+          done

@@ -1,7 +1,7 @@
 # Resusable workflow to wo-ready a given cluster
-# This workflow will delete svgrps
+# if woready, it will create targets and also configure service groups
 
-name: wo-delete-targets (Reusable)
+name: wo-setup-targets (Reusable)
 
 on:
   workflow_call:
@@ -22,7 +22,7 @@ on:
 
 jobs:
 
-  wo-delete-targets-cls:
+  wo-setup-targets-cls:
     env:
       site: ${{ inputs.site }}
       rg: ${{ inputs.rg }}
@@ -59,11 +59,16 @@ jobs:
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
-        siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
-    - name: Delete targets
+    - name: Create service groups
       if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
-      uses: ./.github/actions/wo-delete-targets
+      uses: ./.github/actions/wo-setup-svgrps
       with:
         site: ${{ inputs.site }}
+
+    - name: Create targets
+      if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
+      uses: ./.github/actions/wo-setup-targets
+      with:
+        site: ${{ inputs.sites }}
         rg: ${{ inputs.rg }}

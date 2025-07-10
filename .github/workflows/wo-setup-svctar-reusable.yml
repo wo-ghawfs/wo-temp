@@ -1,7 +1,7 @@
 # Resusable workflow to wo-ready a given cluster
-# if woready, it will also configure service groups
+# if woready, it will also configure service groups and targets
 
-name: wo-setup-svgrps (Reusable)
+name: wo-setup-svctar (Reusable)
 
 on:
   workflow_call:
@@ -22,7 +22,7 @@ on:
 
 jobs:
 
-  wo-setup-svgrps-cls:
+  wo-setup-svctar-cls:
     env:
       site: ${{ inputs.site }}
       rg: ${{ inputs.rg }}
@@ -59,7 +59,6 @@ jobs:
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
-        siteClsName: ${{ steps.siteinfo.outputs.siteClsName }}
 
     - name: Create service groups
       if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
@@ -67,8 +66,9 @@ jobs:
       with:
         site: ${{ inputs.site }}
 
-    # - name: Create targets
-    #   uses: ./.github/actions/wo-setup-targets
-    #   with:
-    #     site: ${{ inputs.sites }}
-    #     rg: ${{ inputs.rg }}
+    - name: Create targets
+      if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
+      uses: ./.github/actions/wo-setup-targets
+      with:
+        site: ${{ inputs.sites }}
+        rg: ${{ inputs.rg }}
