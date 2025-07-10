@@ -53,9 +53,9 @@ runs:
           --resource-group $CONTEXT_RG \
           --name $CONTEXT_NAME)
         
-        # Extract existing hierarchies and capabilities
-        echo "$CONTEXT_JSON" | jq '.hierarchies' > /tmp/existing_hierarchies.json
-        echo "$CONTEXT_JSON" | jq '.capabilities // []' > /tmp/existing_capabilities.json
+        # Extract existing hierarchies and capabilities from properties
+        echo "$CONTEXT_JSON" | jq '.properties.hierarchies' > /tmp/existing_hierarchies.json
+        echo "$CONTEXT_JSON" | jq '.properties.capabilities // []' > /tmp/existing_capabilities.json
         
         echo "Existing hierarchies and capabilities extracted"
 
