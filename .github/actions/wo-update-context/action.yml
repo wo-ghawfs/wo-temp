@@ -7,17 +7,17 @@ runs:
     - name: Read context metadata
       shell: bash
       run: |
-        echo "Reading context metadata from .pg/common/context_metadata.yaml..."
-        if [ ! -f ".pg/common/context_metadata.yaml" ]; then
-          echo "Error: .pg/common/context_metadata.yaml not found"
+        echo "Reading context metadata from .pg/sites/common/common.yaml..."
+        if [ ! -f ".pg/sites/common/common.yaml" ]; then
+          echo "Error: .pg/sites/common/common.yaml not found"
           exit 1
         fi
         
         # Read context parameters from metadata file
-        CONTEXT_SUB=$(yq eval '.context.subscription-id' .pg/common/context_metadata.yaml)
-        CONTEXT_RG=$(yq eval '.context.resource-group' .pg/common/context_metadata.yaml)
-        CONTEXT_LOCATION=$(yq eval '.context.location' .pg/common/context_metadata.yaml)
-        CONTEXT_NAME=$(yq eval '.context.name' .pg/common/context_metadata.yaml)
+        CONTEXT_SUB=$(yq eval '.context.contextSubscriptionId' .pg/sites/common/common.yaml)
+        CONTEXT_RG=$(yq eval '.context.contextRG' .pg/sites/common/common.yaml)
+        CONTEXT_LOCATION=$(yq eval '.context.contextLocation' .pg/sites/common/common.yaml)
+        CONTEXT_NAME=$(yq eval '.context.contextName' .pg/sites/common/common.yaml)
         
         # Export as environment variables for subsequent steps
         echo "CONTEXT_SUB=$CONTEXT_SUB" >> $GITHUB_ENV
@@ -62,19 +62,19 @@ runs:
     - name: Read new capabilities
       shell: bash
       run: |
-        echo "Reading new capabilities from .pg/common/capabilities.json..."
-        if [ ! -f ".pg/common/capabilities.json" ]; then
-          echo "Error: .pg/common/capabilities.json not found"
+        echo "Reading new capabilities from .pg/sites/common/capabilities.json..."
+        if [ ! -f ".pg/sites/common/capabilities.json" ]; then
+          echo "Error: .pg/sites/common/capabilities.json not found"
           exit 1
         fi
         
         # Validate JSON format
-        if ! jq empty .pg/common/capabilities.json; then
-          echo "Error: Invalid JSON format in .pg/common/capabilities.json"
+        if ! jq empty .pg/sites/common/capabilities.json; then
+          echo "Error: Invalid JSON format in .pg/sites/common/capabilities.json"
           exit 1
         fi
         
-        cp .pg/common/capabilities.json /tmp/new_capabilities.json
+        cp .pg/sites/common/capabilities.json /tmp/new_capabilities.json
         echo "New capabilities loaded successfully"
 
     - name: Check for new capabilities
