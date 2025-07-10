@@ -1,0 +1,131 @@
+name: Update Workload Orchestration Context
+description: Updates an Azure Workload Orchestration Context by merging new capabilities with existing ones
+
+runs:
+  using: composite
+  steps:
+    - name: Read context metadata
+      shell: bash
+      run: |
+        echo "Reading context metadata from .pg/common/context_metadata.yaml..."
+        if [ ! -f ".pg/common/context_metadata.yaml" ]; then
+          echo "Error: .pg/common/context_metadata.yaml not found"
+          exit 1
+        fi
+        
+        # Read context parameters from metadata file
+        CONTEXT_SUB=$(yq eval '.context.subscription-id' .pg/common/context_metadata.yaml)
+        CONTEXT_RG=$(yq eval '.context.resource-group' .pg/common/context_metadata.yaml)
+        CONTEXT_LOCATION=$(yq eval '.context.location' .pg/common/context_metadata.yaml)
+        CONTEXT_NAME=$(yq eval '.context.name' .pg/common/context_metadata.yaml)
+        
+        # Export as environment variables for subsequent steps
+        echo "CONTEXT_SUB=$CONTEXT_SUB" >> $GITHUB_ENV
+        echo "CONTEXT_RG=$CONTEXT_RG" >> $GITHUB_ENV
+        echo "CONTEXT_LOCATION=$CONTEXT_LOCATION" >> $GITHUB_ENV
+        echo "CONTEXT_NAME=$CONTEXT_NAME" >> $GITHUB_ENV
+        
+        echo "Context metadata loaded:"
+        echo "  Subscription: $CONTEXT_SUB"
+        echo "  Resource Group: $CONTEXT_RG"
+        echo "  Location: $CONTEXT_LOCATION"
+        echo "  Name: $CONTEXT_NAME"
+
+    - name: Verify context exists
+      shell: bash
+      run: |
+        echo "Checking if context '$CONTEXT_NAME' exists..."
+        if ! az workload-orchestration context show \
+          --subscription $CONTEXT_SUB \
+          --resource-group $CONTEXT_RG \
+          --name $CONTEXT_NAME > /dev/null 2>&1; then
+          echo "Error: Context '$CONTEXT_NAME' does not exist"
+          exit 1
+        fi
+        echo "Context exists, proceeding with update..."
+
+    - name: Get existing context data
+      shell: bash
+      run: |
+        echo "Retrieving existing context data..."
+        CONTEXT_JSON=$(az workload-orchestration context show \
+          --subscription $CONTEXT_SUB \
+          --resource-group $CONTEXT_RG \
+          --name $CONTEXT_NAME)
+        
+        # Extract existing hierarchies and capabilities
+        echo "$CONTEXT_JSON" | jq '.hierarchies' > /tmp/existing_hierarchies.json
+        echo "$CONTEXT_JSON" | jq '.capabilities // []' > /tmp/existing_capabilities.json
+        
+        echo "Existing hierarchies and capabilities extracted"
+
+    - name: Read new capabilities
+      shell: bash
+      run: |
+        echo "Reading new capabilities from .pg/common/capabilities.json..."
+        if [ ! -f ".pg/common/capabilities.json" ]; then
+          echo "Error: .pg/common/capabilities.json not found"
+          exit 1
+        fi
+        
+        # Validate JSON format
+        if ! jq empty .pg/common/capabilities.json; then
+          echo "Error: Invalid JSON format in .pg/common/capabilities.json"
+          exit 1
+        fi
+        
+        cp .pg/common/capabilities.json /tmp/new_capabilities.json
+        echo "New capabilities loaded successfully"
+
+    - name: Check for new capabilities
+      shell: bash
+      run: |
+        echo "Checking if capabilities need to be added..."
+        
+        # Check if all new capabilities already exist
+        NEW_CAPS_EXIST=true
+        for cap_name in $(jq -r '.[].name' /tmp/new_capabilities.json); do
+          if ! jq -e --arg name "$cap_name" '.[] | select(.name == $name)' /tmp/existing_capabilities.json > /dev/null; then
+            NEW_CAPS_EXIST=false
+            break
+          fi
+        done
+        
+        if [ "$NEW_CAPS_EXIST" = "true" ]; then
+          echo "All capabilities already exist in context - no update needed"
+          echo "UPDATE_NEEDED=false" >> $GITHUB_ENV
+        else
+          echo "New capabilities found - will add to existing capabilities"
+          echo "UPDATE_NEEDED=true" >> $GITHUB_ENV
+          
+          # Simply merge existing + new capabilities
+          jq -s '.[0] + .[1] | unique_by(.name)' \
+            /tmp/existing_capabilities.json \
+            /tmp/new_capabilities.json > /tmp/merged_capabilities.json
+        fi
+
+    - name: Update context
+      shell: bash
+      run: |
+        if [ "$UPDATE_NEEDED" = "true" ]; then
+          echo "Updating context '$CONTEXT_NAME'..."
+          
+          az workload-orchestration context create \
+            --subscription $CONTEXT_SUB \
+            --resource-group $CONTEXT_RG \
+            --location $CONTEXT_LOCATION \
+            --name $CONTEXT_NAME \
+            --hierarchies "@/tmp/existing_hierarchies.json" \
+            --capabilities "@/tmp/merged_capabilities.json"
+          
+          echo "Context updated successfully"
+        else
+          echo "Skipping context update - no new capabilities to add"
+        fi
+
+    - name: Cleanup temporary files
+      shell: bash
+      run: |
+        echo "Cleaning up temporary files..."
+        rm -f /tmp/existing_hierarchies.json /tmp/existing_capabilities.json /tmp/new_capabilities.json /tmp/merged_capabilities.json
+        echo "Cleanup completed"

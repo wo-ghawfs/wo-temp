@@ -44,7 +44,33 @@ permissions:
   contents: write # for actions/checkout
 
 jobs:
+  update-context:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Azure Login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - uses: actions/checkout@v4
+
+      - name: Source composite actions
+        uses: ./.github/actions/wo-utilities/
+        with:
+          utilities: "yq"
+
+      - name: Install Workload Orchestration Extension
+        uses: ./.github/actions/wo-install-wo-extension
+
+      - name: Update Context
+        uses: ./.github/actions/wo-update-context
+
   detect-apps-resources-to-update:
+    needs: update-context
     runs-on: ubuntu-latest
     outputs:
       apps: ${{ github.event_name == 'workflow_dispatch' && steps.app-list-dispatch.outputs.apps || steps.app-list.outputs.apps }}
@@ -256,6 +282,7 @@ jobs:
           metadata-file: ${{ steps.get-files.outputs.metadata_file }}
 
   update_common_artifacts:
+    needs: update-context
     if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.update_common != 'none' }}
     runs-on: ubuntu-latest
     env:

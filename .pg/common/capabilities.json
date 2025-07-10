@@ -1,0 +1,10 @@
+[
+    {
+        "name": "azure-soap",
+        "description": "soap" 
+    },
+    {
+        "name": "azure-shampoo",
+        "description": "Shampoo"
+    }
+]
