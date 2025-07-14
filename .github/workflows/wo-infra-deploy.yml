@@ -58,7 +58,7 @@ on:
       usesiterg:
         type: string
         description: TESTING RG OVERRIDE
-        default: true
+        default: false
 
 permissions:
   id-token: write # for actions
