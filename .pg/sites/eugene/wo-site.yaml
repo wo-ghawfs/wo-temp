@@ -1,0 +1,9 @@
+site:
+  siteRG:                       "wf-rg-eugene"
+  aksLocation: 			"eastus2euap"
+  aksClusterName: 		"wf-eugene-cls"
+  aksClusterIdentity: 		"wf-eugene-clsId"
+  customLocationRG: 		"wf-rg-eugene"
+  customLocationName: 		"wf-eugene-custlocation"
+  customLocationLocation:       "eastus2euap"
+  customLocationNamespace: 	"wf-eugene-ns"
