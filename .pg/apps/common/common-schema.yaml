@@ -1,5 +1,5 @@
 metadata:
-  name: common-schema
+  name: common-sch
   version: 1.0.1
 rules:
   SqlServerEndpoint:
