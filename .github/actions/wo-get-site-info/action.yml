@@ -68,9 +68,6 @@ outputs:
   levels:
     description: hierarchy levels
     value: ${{ steps.siteinfo.outputs.levels }}
-  capabilities:
-    description: capabilities
-    value: ${{ steps.siteinfo.outputs.capabilities }}
 
 runs:
   using: "composite"
@@ -134,7 +131,6 @@ runs:
         echo "extnName=$(yq '.workloadorchestration.extensionName' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
 
         echo "levels=$(yq '.hierarchy.levels' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
-        echo "capabilities=$(yq '.capabilities' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
 
     - name: Debug dumpinfo
       shell: bash
@@ -161,4 +157,3 @@ runs:
         echo "extnVer:          ${{ steps.siteinfo.outputs.extnVer }}"
         echo "extnName:         ${{ steps.siteinfo.outputs.extnName }}"
         echo "levels:           ${{ steps.siteinfo.outputs.levels }}"
-        echo "capabilities:     ${{ steps.siteinfo.outputs.capabilities }}"
