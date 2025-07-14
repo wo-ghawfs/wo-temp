@@ -1,6 +1,6 @@
 metadata:
   name: testapp2-config-template
-  version: 3.3.5
+  version: 3.3.4
 schema:
   name: testapp2-schema
   version: 3.3.3
