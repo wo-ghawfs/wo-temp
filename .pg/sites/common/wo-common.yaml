@@ -41,7 +41,7 @@ providerAppId:
 workloadorchestration:
   whlVer: "workload_orchestration-1.1.8-py3-none-any.whl"
   extensionVer: "2.1.2"
-  extensionName: "maestroext"
+  extensionName: "workloadorchestration"
   release-train: "stable"
   extensionScope: "cluster"
 
