@@ -2,7 +2,7 @@ metadata:
   name: testapp2-config-temp
   version: 3.3.4
 schema:
-  name: testapp2-schema
+  name: testapp2-sch
   version: 3.3.4
 configs:
   AppName: ${{$val(AppName)}}
