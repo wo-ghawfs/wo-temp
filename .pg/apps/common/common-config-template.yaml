@@ -1,9 +1,9 @@
 metadata:
   name: common-config-template
-  version: 1.0.0
+  version: 1.0.1
 schema:
   name: common-schema
-  version: 1.0.0
+  version: 1.0.1
 configs:
   SqlServerEndpoint: http://localhost/SqlServerEndpoint
   LineHealthEndpoint: http://localhost/LineHealthEndpoint
