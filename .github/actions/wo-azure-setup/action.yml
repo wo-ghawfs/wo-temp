@@ -32,5 +32,4 @@ runs:
           az cloud update --endpoint-resource-manager "https://management.azure.com"
 
     - name: Install prerequite extensions
-      # id: wo-prereqs
       uses: ./.github/actions/wo-prereqs

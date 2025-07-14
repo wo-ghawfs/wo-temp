@@ -42,18 +42,6 @@ jobs:
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
         azcliversion: "2.73.0"
 
-    - name: Source site info
-      id: siteinfo
-      uses: ./.github/actions/wo-get-site-info
-      with:
-        site: ${{ inputs.site }}
-        rg: ${{ inputs.rg }}
-
-    - name: Setup resource group
-      id: rgsetup
-      run: |
-        az group create --location ${{ steps.siteinfo.outputs.siteLoc }}  --name ${{ steps.siteinfo.outputs.rg }}
-
     - name: Create connected aks cluster
       id: create-aks-conn-cluster
       uses: ./.github/actions/wo-create-aks-conn-cluster
@@ -67,7 +55,6 @@ jobs:
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
-
 
     - name: Create w-o ready cluster
       if: ${{ steps.check-wo-ready.outputs.woready == 'false' }}

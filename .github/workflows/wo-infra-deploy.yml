@@ -15,7 +15,7 @@
 #------------------------------------------------------------------------
 
 name: WO-INFRA-DEPLOY
-run-name: "Site: ${{ github.event.inputs.sites }} -->${{ github.event.inputs.action }}-->${{ github.event.inputs.commands }}"
+run-name: "Site: ${{ github.event.inputs.sites }} :: ${{ github.event.inputs.action }} => ${{ github.event.inputs.commands }}"
 
 on:
   workflow_dispatch:
@@ -29,6 +29,8 @@ on:
         - (** AzArc connected **) wo-setup-woready-arc-cls
         - (** new AKS **) wo-setup-woready-aks-cls
         - (** new AKS **) wo-setup-woready-allinone-aks-cls
+        - wo-setup-contexts
+        - wo-setup-sites
         - wo-setup-svgrps
         - wo-setup-targets
         - wo-delete-targets
@@ -45,6 +47,7 @@ on:
         - bethel
         - canton
         - denver
+        - eugene
         - tanzu
         required: true
       commands:
@@ -115,6 +118,28 @@ jobs:
   call-wo-all-in-one-aks-conn-cls:
      if: ${{ github.event.inputs.action == '(** new AKS **) wo-setup-woready-allinone-aks-cls' && github.event.inputs.sites != 'none' }}
      uses: ./.github/workflows/wo-all-in-one-aks-woready-cls-reusable.yml
+     with:
+       site: ${{ github.event.inputs.sites }}
+       rg: ${{ github.event.inputs.usesiterg }}
+     secrets:
+       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  call-wo-setup-contexts:
+     if: ${{ github.event.inputs.action == 'wo-setup-contexts' && github.event.inputs.sites != 'none' }}
+     uses: ./.github/workflows/wo-setup-contexts-reusable.yml
+     with:
+       site: ${{ github.event.inputs.sites }}
+       rg: ${{ github.event.inputs.usesiterg }}
+     secrets:
+       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+       AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+       AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+  call-wo-setup-sites:
+     if: ${{ github.event.inputs.action == 'wo-setup-sites' && github.event.inputs.sites != 'none' }}
+     uses: ./.github/workflows/wo-setup-sites-reusable.yml
      with:
        site: ${{ github.event.inputs.sites }}
        rg: ${{ github.event.inputs.usesiterg }}

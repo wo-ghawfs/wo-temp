@@ -1,0 +1,53 @@
+name: Create WO Sites 
+description: Create Site as per config
+inputs:
+  site:
+    description: Site name, e.g., austin, boston, etc.
+    required: true
+  rg:
+    description: resource group to use
+    required: true
+runs:
+  using: "composite"
+  steps:
+  - name: source site info
+    id: siteinfo
+    uses: ./.github/actions/wo-get-site-info
+    with:
+      site: ${{ inputs.site }}
+      rg: ${{ inputs.rg }}
+
+  - name: create a site 
+    id: create-site
+    shell: bash
+    run: |
+
+      siteJson="${{ inputs.site }}-site.json"
+      siteAddressJson="${{ inputs.site }}-site-address.json"
+      siteUri="/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Edge/sites/${{ inputs.site }}?api-version=2024-02-01-preview"
+      siteId="/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourceGroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.Edge/sites/${{ inputs.site }}"
+      siteReference="{{ inputs.site }}"
+      siteAddress="/subscriptions/${{ steps.siteinfo.outputs.subId }}/resourcegroups/${{ steps.siteinfo.outputs.rg }}/providers/Microsoft.EdgeOrder/addresses/${{ inputs.site }}-site-address"
+
+      yq -i ".properties.addressResourceId = \"$siteAddress\"" .pg/sites/common/template-site.json
+      yq -i ".properties.description = \"${{ inputs.site }}\"" .pg/sites/common/template-site.json
+      yq -i ".properties.displayName = \"${{ inputs.site }}\"" .pg/sites/common/template-site.json
+
+      cp .pg/sites/common/template-site.json $siteJson
+      cp .pg/sites/common/template-site-address.json $siteAddressJson
+
+      ls -al *.json
+
+      # create site address
+      echo " "
+      echo ">>> creating site address ..."
+      az resource create --resource-type Microsoft.EdgeOrder/addresses --resource-group "${{ steps.siteinfo.outputs.rg }}" --location "${{ steps.siteinfo.outputs.location }}" \
+                         --name "${{ inputs.site }}" --properties "@$siteAddressJson"
+
+      #Create site 
+      echo " "
+      echo ">>> creating site ..."
+      az rest --method PUT --uri "$siteUri" --body "@$siteJson"
+
+      echo " "
+      echo " >>> Site ${{ inputs.site }} created"

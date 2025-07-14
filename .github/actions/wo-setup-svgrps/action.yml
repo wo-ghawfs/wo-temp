@@ -4,25 +4,34 @@ inputs:
   site:
     description: Site name, e.g., austin, boston, etc.
     required: true
+  rg:
+    description: rg override
+    required: true
 runs:
   using: "composite"
   steps:
+  - name: source site info
+    id: siteinfo
+    uses: ./.github/actions/wo-get-site-info
+    with:
+      site: ${{ inputs.site }}
+      rg: ${{ inputs.rg }}
+
   - name: create service groups dynamically based on defined hierarchy levels
     id: levels
     shell: bash
     run: |
       az cloud update --endpoint-resource-manager "https://management.azure.com"
       # Source common and context info
-      ctxTenant=$(yq '.common.tenantId' .pg/sites/common/wo-common.yaml)
-      ctxRG=$(yq '.context.contextRG' .pg/sites/common/wo-common.yaml)
-      ctxName=$(yq '.context.contextName' .pg/sites/common/wo-common.yaml)
-      ctxLoc=$(yq '.context.contextLocation' .pg/sites/common/wo-common.yaml)
-      ctxSub=$(yq '.context.contextSubscriptionId' .pg/sites/common/wo-common.yaml)
-
-      wfloc=$(yq '.site.aksLocation' .pg/sites/${{ inputs.site }}/wo-site.yaml)
-      wfrg=$(yq '.site.customLocationRG' .pg/sites/${{ inputs.site }}/wo-site.yaml) 
-
       echo "---- new code ---"
+      # Source common and context info
+      ctxTenant=${{ steps.siteinfo.outputs.ctxTenant }}
+      ctxRG=${{ steps.siteinfo.outputs.ctxRG }}
+      ctxName=${{ steps.siteinfo.outputs.ctxName }}
+      ctxLoc=${{ steps.siteinfo.outputs.ctxLoc }}
+      ctxSub=${{ steps.siteinfo.outputs.ctxSub }}
+      wfloc=${{ steps.siteinfo.outputs.location }}
+      wfrg=${{ steps.siteinfo.outputs.rg }}
 
       levels_str=$(yq -r '.hierarchy.levels' .pg/sites/common/wo-common.yaml)
       IFS=',' read -ra levels <<< "$levels_str"
@@ -44,7 +53,8 @@ runs:
         local site="$1"
         local api_ver="api-version=2024-02-01-preview"
 
-        parent=$ctxTenant
+        #parent=$ctxTenant
+        parent=${{ steps.siteinfo.outputs.tenantId }}
 
         for ((i=0; i < $num_levels; i++));  do
           level="${levels[$i]}"
@@ -70,8 +80,12 @@ runs:
 
           #tag labels appropriately
           echo "Assign labels to SGs"
+          # az rest --method put \
+          #         --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name/providers/Microsoft.Edge/sites/$svcgrp_name?api-version=2025-03-01-preview" \
+          #         --body "{'properties':{'displayName':'$svcgrp_name','description': '$svcgrp_name','labels': {'level': '$level'}}}" \
+          #         --resource https://management.azure.com
           az rest --method put \
-                  --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name/providers/Microsoft.Edge/sites/$svcgrp_name?api-version=2025-03-01-preview" \
+                  --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name/providers/Microsoft.Edge/sites/${{ inputs.site }}?api-version=2025-03-01-preview" \
                   --body "{'properties':{'displayName':'$svcgrp_name','description': '$svcgrp_name','labels': {'level': '$level'}}}" \
                   --resource https://management.azure.com
 
@@ -83,14 +97,11 @@ runs:
       site=${{ inputs.site }}
       create_svcgrps "$site"
 
-      # az extension add -s .exts/workload_orchestration-1.1.6-py3-none-any.whl -y || {
-      #   echo "Failed to add 'workload-orchestration' extension. Please verify the extension name in Azure CLI documentation."
-      #   exit 1
-      # }
-
       # --- site reference context update only done for highest level SG ---
       echo "update site reference in context"
+      # az workload-orchestration context site-reference create --subscription "$ctxSub" --resource-group "$ctxRG" --context-name "$ctxName" --name "$top_svcgrp" \
+      #                         --site-id "/providers/Microsoft.Management/serviceGroups/$top_svcgrp/providers/Microsoft.Edge/sites/$top_svcgrp" 
       az workload-orchestration context site-reference create --subscription "$ctxSub" --resource-group "$ctxRG" --context-name "$ctxName" --name "$top_svcgrp" \
-                              --site-id "/providers/Microsoft.Management/serviceGroups/$top_svcgrp/providers/Microsoft.Edge/sites/$top_svcgrp" 
+                              --site-id "/providers/Microsoft.Management/serviceGroups/$top_svcgrp/providers/Microsoft.Edge/sites/${{ inputs.site }}" 
 
       echo "All service groups created and site reference updated"

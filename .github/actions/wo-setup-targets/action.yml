@@ -26,13 +26,9 @@ runs:
       echo "Get target info"
 
       # Source common info
-      # wfloc=$(yq '.site.aksLocation' .pg/sites/${{ inputs.site }}/wo-site.yaml)
-      # wfrg=$(yq '.site.customLocationRG' .pg/sites/${{ inputs.site }}/wo-site.yaml)
       wfloc=${{ steps.siteinfo.outputs.location }}
       wfrg=${{ steps.siteinfo.outputs.rg }}
 
-      # echo "rg=$(yq '.common.rg' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
-      # echo "location=$(yq '.common.location' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
       echo "levels=$(yq '.hierarchy.levels' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
 
       # Correctly compute the number of targets and export it
@@ -66,7 +62,6 @@ runs:
                                                 --subscription ${{ steps.siteinfo.outputs.ctxSub }} --query id)
 
         # get customlocation
-        # --extended-location '{ "type": "CustomLocation", "name": "/subscriptions/***/resourceGroups/wf-rg-albany/providers/Microsoft.ExtendedLocation/customLocations/wf-albany-custlocation" }'
         concls=$(az customlocation show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.sitecusLocName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query id -o tsv 2>&1)
         echo "extended location: $concls"
 
@@ -74,17 +69,28 @@ runs:
 
 
         # Create target
+        echo ">>> creating target ..."
         az workload-orchestration target create --resource-group $wfrg --location $wfloc --name $target_name --display-name "$target_name" \
                                  --hierarchy-level "$target_level" --capabilities "$target_caps" --description "$target_name-$target_level" \
                                  --solution-scope "$wfrg" --target-specification '@.pg/sites/${{ inputs.site }}/targetspecs.json' \
                                  --extended-location '@.pg/sites/${{ inputs.site }}/custom-location.json' \
-                                 --context-id "/subscriptions/973d15c6-6c57-447e-b9c6-6d79b5b784ab/resourceGroups/Mehoopany/providers/Microsoft.Edge/contexts/Mehoopany-Context"
+                                 --context-id "/subscriptions/${{ steps.siteinfo.outputs.ctxSub }}/resourceGroups/${{ steps.siteinfo.outputs.ctxRG }}/providers/Microsoft.Edge/contexts/${{ steps.siteinfo.outputs.ctxName }}"
+                                 # --context-id "/subscriptions/973d15c6-6c57-447e-b9c6-6d79b5b784ab/resourceGroups/Mehoopany/providers/Microsoft.Edge/contexts/Mehoopany-Context"
+
+        
+        pstatus=""
+        while [ "$pstatus" != "Succeeded" ]; do
+          pstatus=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query properties.provisioningState -o tsv)
+          echo "provisioning state ... $pstatus"
+          sleep 15 
+        done
 
         #link target to svcgrp
+        echo ">>> linking target to svgrp ..."
         targetId=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query id --output tsv)
 
         # give time for previous op to complete
-        sleep 60
+        sleep 30
 
         if [[ "$target_level" == "line" ]]; then
           # Set line level parent to factory level 

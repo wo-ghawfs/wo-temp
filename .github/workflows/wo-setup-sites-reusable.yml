@@ -1,7 +1,6 @@
-# Resusable workflow to wo-ready a given cluster
-# if woready, it will also configure service groups
+# Resusable workflow to setup sites for a given cluster if wo-ready
 
-name: wo-setup-svgrps (Reusable)
+name: wo-setup-sites (Reusable)
 
 on:
   workflow_call:
@@ -22,7 +21,7 @@ on:
 
 jobs:
 
-  wo-setup-svgrps-cls:
+  wo-setup-sites-cls:
     env:
       site: ${{ inputs.site }}
       rg: ${{ inputs.rg }}
@@ -48,9 +47,9 @@ jobs:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}
 
-    - name: Create service groups
+    - name: Create sites
       if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
-      uses: ./.github/actions/wo-setup-svgrps
+      uses: ./.github/actions/wo-setup-sites
       with:
         site: ${{ inputs.site }}
         rg: ${{ inputs.rg }}

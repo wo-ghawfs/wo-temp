@@ -65,6 +65,12 @@ outputs:
   extnName:
     description: WO extension name
     value: ${{ steps.siteinfo.outputs.extnName }}
+  levels:
+    description: hierarchy levels
+    value: ${{ steps.siteinfo.outputs.levels }}
+  capabilities:
+    description: capabilities
+    value: ${{ steps.siteinfo.outputs.capabilities }}
 
 runs:
   using: "composite"
@@ -90,6 +96,11 @@ runs:
           echo "location=$(yq '.common.location' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
 
         fi
+       
+        if ! az group show --name $rg --output none 2>/dev/null; then
+          # RG does not exist, create one
+          az group create --location $location  --name $rg
+        fi
 
     - name: Get site details
       id: siteinfo
@@ -100,10 +111,8 @@ runs:
         siteId=".pg/sites/${{ inputs.site }}/wo-site.yaml"
 
         # source common info
-        # echo "rg=$(yq '.common.rg' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
         echo "subId=$(yq '.common.subscriptionId' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
         echo "tenantId=$(yq '.common.tenantId' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
-        # echo "location=$(yq '.common.location' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
   
         # Source common and context info
         echo "ctxRG=$(yq '.context.contextRG' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
@@ -124,10 +133,13 @@ runs:
         echo "extnVer=$(yq '.workloadorchestration.extensionVer' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
         echo "extnName=$(yq '.workloadorchestration.extensionName' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
 
+        echo "levels=$(yq '.hierarchy.levels' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+        echo "capabilities=$(yq '.capabilities' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
+
     - name: Debug dumpinfo
       shell: bash
       run: |
-        echo " ------ get-info ---------"
+        echo " ------ get-site-info ---------"
         echo
         echo "rg:               ${{ steps.rgtouse.outputs.rg }}"
         echo "subId:            ${{ steps.siteinfo.outputs.subId }}"
@@ -148,3 +160,5 @@ runs:
         echo "whlVer:           ${{ steps.siteinfo.outputs.whlVer }}"
         echo "extnVer:          ${{ steps.siteinfo.outputs.extnVer }}"
         echo "extnName:         ${{ steps.siteinfo.outputs.extnName }}"
+        echo "levels:           ${{ steps.siteinfo.outputs.levels }}"
+        echo "capabilities:     ${{ steps.siteinfo.outputs.capabilities }}"
