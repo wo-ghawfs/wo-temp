@@ -38,6 +38,10 @@ on:
         type: string
         description: 'Comma-separated list of apps to update (e.g., testapp1,testapp2)'
         default: null
+      usesiterg:
+        type: string
+        description: 'RG OVERRIDE - Leave empty to use default from wo-common.yaml'
+        default: ""
 
 permissions:
   id-token: write # 
@@ -142,9 +146,6 @@ jobs:
     needs: detect-apps-resources-to-update
     if: ${{ needs.detect-apps-resources-to-update.outputs.apps != '[]' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none') }}
     runs-on: ubuntu-latest
-    env:
-      AZURE_RESOURCE_GROUP: 'cm-resources'
-      AZURE_LOCATION: 'eastus2'
     strategy:
       fail-fast: false
       max-parallel: 4  # Limit to 4 concurrent jobs
@@ -168,6 +169,30 @@ jobs:
         uses: ./.github/actions/wo-utilities/
         with:
           utilities: "yq"
+
+      - name: Read Azure config from wo-common.yaml
+        run: |
+          # Read default values from wo-common.yaml
+          DEFAULT_RG=$(yq eval '.common.rg' .pg/sites/common/wo-common.yaml)
+          DEFAULT_LOC=$(yq eval '.common.location' .pg/sites/common/wo-common.yaml)
+          
+          # Check if usesiterg override is provided
+          if [[ "${{ github.event.inputs.usesiterg }}" != "" ]]; then
+            # Use the override value
+            AZURE_RG="${{ github.event.inputs.usesiterg }}"
+            echo "Using override resource group: $AZURE_RG"
+          else
+            # Use the default from config
+            AZURE_RG="$DEFAULT_RG"
+            echo "Using default resource group from wo-common.yaml: $AZURE_RG"
+          fi
+          
+          # Location always comes from config (no override for location)
+          AZURE_LOC="$DEFAULT_LOC"
+          
+          echo "AZURE_RESOURCE_GROUP=$AZURE_RG" >> $GITHUB_ENV
+          echo "AZURE_LOCATION=$AZURE_LOC" >> $GITHUB_ENV
+          echo "Final Azure config - RG: $AZURE_RG, Location: $AZURE_LOC"
 
       - name: Verify composite actions
         run: |
@@ -285,9 +310,6 @@ jobs:
     needs: update-context
     if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.update_common != 'none' }}
     runs-on: ubuntu-latest
-    env:
-      AZURE_RESOURCE_GROUP: 'cm-resources'
-      AZURE_LOCATION: 'eastus2'
     steps:
       - name: Azure Login with OIDC
         uses: azure/login@v2
@@ -303,6 +325,30 @@ jobs:
         uses: ./.github/actions/wo-utilities/
         with:
           utilities: "yq"
+
+      - name: Read Azure config from wo-common.yaml
+        run: |
+          # Read default values from wo-common.yaml
+          DEFAULT_RG=$(yq eval '.common.rg' .pg/sites/common/wo-common.yaml)
+          DEFAULT_LOC=$(yq eval '.common.location' .pg/sites/common/wo-common.yaml)
+          
+          # Check if usesiterg override is provided
+          if [[ "${{ github.event.inputs.usesiterg }}" != "" ]]; then
+            # Use the override value
+            AZURE_RG="${{ github.event.inputs.usesiterg }}"
+            echo "Using override resource group: $AZURE_RG"
+          else
+            # Use the default from config
+            AZURE_RG="$DEFAULT_RG"
+            echo "Using default resource group from wo-common.yaml: $AZURE_RG"
+          fi
+          
+          # Location always comes from config (no override for location)
+          AZURE_LOC="$DEFAULT_LOC"
+          
+          echo "AZURE_RESOURCE_GROUP=$AZURE_RG" >> $GITHUB_ENV
+          echo "AZURE_LOCATION=$AZURE_LOC" >> $GITHUB_ENV
+          echo "Final Azure config - RG: $AZURE_RG, Location: $AZURE_LOC"
 
       - name: Install Workload Orchestration Extension
         uses: ./.github/actions/wo-install-wo-extension
