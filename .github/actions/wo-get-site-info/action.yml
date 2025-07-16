@@ -94,12 +94,14 @@ runs:
           echo "rg=$rg" >> $GITHUB_OUTPUT
           echo "location=$location" >> $GITHUB_OUTPUT
         fi
-
+        
+        subId=$(yq '.common.subscriptionId' .pg/sites/common/wo-common.yaml)
+        
         # create rg if one does not exists
-        if ! az group show --name $rg --output none 2>/dev/null; then
+        if ! az group show --name $rg --subscription $subId --output none 2>/dev/null; then
           # RG does not exist, create one
           echo "creating rg $rg in $location ..."
-          az group create --location $location  --name $rg
+          az group create --location $location  --name $rg --subscription $subId
         fi
 
     - name: Get site details
