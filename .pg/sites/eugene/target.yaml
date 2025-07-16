@@ -23,3 +23,9 @@ target:
     caps: ["azure-soap","azure-shampoo"]
     scope: "wotxpga"
     spec: "targetspecs.json"
+
+  - name: "eug-li-2"
+    level: "line"
+    caps: ["azure-soap","azure-shampoo"]
+    scope: "wotxpga"
+    spec: "targetspecs.json"

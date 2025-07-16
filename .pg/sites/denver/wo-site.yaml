@@ -1,9 +1,9 @@
 site:
   siteRG:                       "wf-rg-denver"
-  aksLocation: 			"eastus"
+  aksLocation: 			"eastus2"
   aksClusterName: 		"wf-denver-cls"
   aksClusterIdentity: 		"wf-denver-clsId"
   customLocationRG: 		"wf-rg-denver"
   customLocationName: 		"wf-denver-custlocation"
-  customLocationLocation:       "eastus"
+  customLocationLocation:       "eastus2"
   customLocationNamespace: 	"wf-denver-ns"
