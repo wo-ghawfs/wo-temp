@@ -147,6 +147,35 @@ runs:
             --specification "${{ inputs.specification-file }}" \
             --description "${{ env.TEMPLATE_DESCRIPTION }}" \
             --enable-external-validation ${{ env.TEMPLATE_ENABLE_VALIDATION }}
+          echo "TEMPLATE_CREATED=true" >> $GITHUB_ENV
         else
           echo "Solution template version already exists. Skipping creation."
+          echo "TEMPLATE_CREATED=false" >> $GITHUB_ENV
         fi
+
+    - name: Create Solution Template Metadata
+      if: env.TEMPLATE_CREATED == 'true'
+      shell: bash
+      run: |
+        # Create folder with solution template name
+        FOLDER_PATH=".pg/apps/${{ inputs.app-name }}/workload-orchestration/${{ env.TEMPLATE_NAME }}"
+        mkdir -p "$FOLDER_PATH"
+        
+        # Create JSON file with version as filename
+        JSON_FILE="$FOLDER_PATH/${{ env.TEMPLATE_VERSION }}.json"
+        
+        # Create JSON content
+        cat > "$JSON_FILE" << EOF
+        {
+          "solutionTemplateName": "${{ env.TEMPLATE_NAME }}",
+          "solutionTemplateVersion": "${{ env.TEMPLATE_NAME }}:${{ env.TEMPLATE_VERSION }}",
+          "baseconfigfile": null,
+          "solutionInstance": []
+        }
+        EOF
+        
+        echo "Created solution template metadata:"
+        echo "  Folder: $FOLDER_PATH"
+        echo "  File: $JSON_FILE"
+        echo "  Content:"
+        cat "$JSON_FILE"
