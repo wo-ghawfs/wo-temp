@@ -1,9 +1,9 @@
 metadata:
   name: testapp1-config-temp
-  version: 2.0.4
+  version: 2.0.5
 schema:
   name: testapp1-sch
-  version: 2.0.4
+  version: 2.0.5
 configs:
   AppName: ${{$val(AppName)}}
   PrometheusPort: ${{$val(PrometheusPort)}}

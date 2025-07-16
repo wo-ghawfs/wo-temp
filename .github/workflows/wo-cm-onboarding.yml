@@ -434,3 +434,21 @@ jobs:
           config-template-file: ${{ steps.get-files.outputs.config_file }}
           description: "Common configuration template for shared settings"
           location: ${{ env.AZURE_LOCATION }}
+
+  commit-generated-files:
+    needs: [update-wo-artifacts, update_common_artifacts]
+    if: always() && (needs.update-wo-artifacts.result == 'success' || needs.update_common_artifacts.result == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Commit solution template metadata files
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto-generated solution template metadata files"
+          file_pattern: ".pg/apps/*/workload-orchestration/*/*.json .pg/apps/common/*/*.json"
+          commit_options: '--no-verify'
+          skip_dirty_check: true
