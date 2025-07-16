@@ -59,6 +59,8 @@ This guide walks you through configuring a **federated identity credential** in 
 2. Open **Access control (IAM)** → Click **+ Add > Add role assignment**
 3. Choose a role, select your UAMI, and then click **Save**
 
+You will need to assign the identity the contributor role at a subscription level.
+
 #### 🔐 Save GitHub Secrets
 
 To authenticate from your GitHub Actions workflow, you'll need to store the following Azure values as **GitHub repository secrets**.
