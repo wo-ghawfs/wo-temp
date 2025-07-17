@@ -445,7 +445,19 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
+      - name: Check for generated files
+        id: check-files
+        run: |
+          if ls .pg/apps/*/workload-orchestration/*/*.json 2>/dev/null || ls .pg/apps/common/*/*.json 2>/dev/null; then
+            echo "files_exist=true" >> $GITHUB_OUTPUT
+            echo "Found JSON files to commit"
+          else
+            echo "files_exist=false" >> $GITHUB_OUTPUT
+            echo "No JSON files found to commit"
+          fi
+
       - name: Commit solution template metadata files
+        if: steps.check-files.outputs.files_exist == 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Auto-generated solution template metadata files"
