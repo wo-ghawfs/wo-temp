@@ -1,6 +1,6 @@
 metadata:
   name: testapp2-sch
-  version: 3.3.5
+  version: 3.3.6
 rules:
   configs:
     AppName:
