@@ -87,15 +87,31 @@ runs:
           
           echo "Config template version not found. Creating new config template..."
           
-          # Execute the command with all parameters
-          az workload-orchestration config-template create \
+          # Capture the response from Azure CLI
+          RESPONSE=$(az workload-orchestration config-template create \
             -g ${{ inputs.resource-group }} \
             -l ${{ inputs.location }} \
             --config-template-name ${{ env.CONFIG_NAME }} \
             --config-template-file "${{ inputs.config-template-file }}" \
             --version ${{ env.CONFIG_VERSION }} \
-            --description "${{ inputs.description }}"
+            --description "${{ inputs.description }}" \
+            --output json)
+          
+          echo "Azure CLI Response:"
+          echo "$RESPONSE"
+          
+          # Extract resource IDs from the response
+          CONFIG_TEMPLATE_ID=$(echo "$RESPONSE" | jq -r '.resourceId // empty')
+          CONFIG_TEMPLATE_VERSION_ID=$(echo "$RESPONSE" | jq -r '.properties.id // empty')
+          
+          # Set environment variables for use in metadata creation
+          echo "CONFIG_TEMPLATE_ID=$CONFIG_TEMPLATE_ID" >> $GITHUB_ENV
+          echo "CONFIG_TEMPLATE_VERSION_ID=$CONFIG_TEMPLATE_VERSION_ID" >> $GITHUB_ENV
           echo "CONFIG_CREATED=true" >> $GITHUB_ENV
+          
+          echo "Extracted Resource IDs:"
+          echo "  Config Template ID: $CONFIG_TEMPLATE_ID"
+          echo "  Config Template Version ID: $CONFIG_TEMPLATE_VERSION_ID"
         else
           echo "Config template version already exists. Skipping creation."
           echo "CONFIG_CREATED=false" >> $GITHUB_ENV
@@ -112,11 +128,11 @@ runs:
         # Create JSON file with version as filename
         JSON_FILE="$FOLDER_PATH/${{ env.CONFIG_VERSION }}.json"
         
-        # Create JSON content
+        # Create JSON content with Azure resource IDs
         cat > "$JSON_FILE" << EOF
         {
-          "solutionTemplateName": "${{ env.CONFIG_NAME }}",
-          "solutionTemplateVersion": "${{ env.CONFIG_NAME }}:${{ env.CONFIG_VERSION }}",
+          "configTemplateId": "${{ env.CONFIG_TEMPLATE_ID }}",
+          "configTemplateVersionId": "${{ env.CONFIG_TEMPLATE_VERSION_ID }}",
           "baseconfigfile": null,
           "solutionInstance": []
         }

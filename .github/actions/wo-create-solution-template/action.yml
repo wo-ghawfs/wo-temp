@@ -139,15 +139,33 @@ runs:
           --solution-template-name ${{ env.TEMPLATE_NAME }} \
           -v ${{ env.TEMPLATE_VERSION }}; then
           echo "Solution template version not found. Creating new version..."
-          az workload-orchestration solution-template create \
+          
+          # Capture the response from Azure CLI
+          RESPONSE=$(az workload-orchestration solution-template create \
             -g ${{ inputs.resource-group }} \
             -l ${{ inputs.location }} \
             --capabilities ${{ env.TEMPLATE_CAPABILITIES }} \
             --configuration-template-file "${{ inputs.template-file }}" \
             --specification "${{ inputs.specification-file }}" \
             --description "${{ env.TEMPLATE_DESCRIPTION }}" \
-            --enable-external-validation ${{ env.TEMPLATE_ENABLE_VALIDATION }}
+            --enable-external-validation ${{ env.TEMPLATE_ENABLE_VALIDATION }} \
+            --output json)
+          
+          echo "Azure CLI Response:"
+          echo "$RESPONSE"
+          
+          # Extract resource IDs from the response
+          SOLUTION_TEMPLATE_ID=$(echo "$RESPONSE" | jq -r '.properties.solutionTemplateId // empty')
+          SOLUTION_TEMPLATE_VERSION_ID=$(echo "$RESPONSE" | jq -r '.properties.solutionTemplateVersionId // empty')
+          
+          # Set environment variables for use in metadata creation
+          echo "SOLUTION_TEMPLATE_ID=$SOLUTION_TEMPLATE_ID" >> $GITHUB_ENV
+          echo "SOLUTION_TEMPLATE_VERSION_ID=$SOLUTION_TEMPLATE_VERSION_ID" >> $GITHUB_ENV
           echo "TEMPLATE_CREATED=true" >> $GITHUB_ENV
+          
+          echo "Extracted Resource IDs:"
+          echo "  Solution Template ID: $SOLUTION_TEMPLATE_ID"
+          echo "  Solution Template Version ID: $SOLUTION_TEMPLATE_VERSION_ID"
         else
           echo "Solution template version already exists. Skipping creation."
           echo "TEMPLATE_CREATED=false" >> $GITHUB_ENV
@@ -164,11 +182,11 @@ runs:
         # Create JSON file with version as filename
         JSON_FILE="$FOLDER_PATH/${{ env.TEMPLATE_VERSION }}.json"
         
-        # Create JSON content
+        # Create JSON content with Azure resource IDs
         cat > "$JSON_FILE" << EOF
         {
-          "solutionTemplateName": "${{ env.TEMPLATE_NAME }}",
-          "solutionTemplateVersion": "${{ env.TEMPLATE_NAME }}:${{ env.TEMPLATE_VERSION }}",
+          "solutionTemplateId": "${{ env.SOLUTION_TEMPLATE_ID }}",
+          "solutionTemplateVersionId": "${{ env.SOLUTION_TEMPLATE_VERSION_ID }}",
           "baseconfigfile": null,
           "solutionInstance": []
         }
