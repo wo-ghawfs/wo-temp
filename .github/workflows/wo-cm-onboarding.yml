@@ -146,6 +146,8 @@ jobs:
     needs: detect-apps-resources-to-update
     if: ${{ needs.detect-apps-resources-to-update.outputs.apps != '[]' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none') }}
     runs-on: ubuntu-latest
+    outputs:
+      files_created: ${{ steps.check-created.outputs.files_created }}
     strategy:
       fail-fast: false
       max-parallel: 4  # Limit to 4 concurrent jobs
@@ -295,6 +297,7 @@ jobs:
           schema-file: ${{ steps.get-files.outputs.schema_file }}
 
       - name: Create App Solution Template
+        id: create-template
         if: steps.update-flags.outputs.create_template == 'true'
         uses: ./.github/actions/wo-create-solution-template
         with:
@@ -306,10 +309,21 @@ jobs:
           specification-file: ${{ steps.get-files.outputs.specs_file }}
           metadata-file: ${{ steps.get-files.outputs.metadata_file }}
 
+      - name: Check if files were created
+        id: check-created
+        run: |
+          if [[ "${{ steps.create-template.outputs.files_created }}" == "true" ]]; then
+            echo "files_created=true" >> $GITHUB_OUTPUT
+          else
+            echo "files_created=false" >> $GITHUB_OUTPUT
+          fi
+
   update_common_artifacts:
     needs: update-context
     if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.update_common != 'none' }}
     runs-on: ubuntu-latest
+    outputs:
+      files_created: ${{ steps.check-created.outputs.files_created }}
     steps:
       - name: Azure Login with OIDC
         uses: azure/login@v2
@@ -426,6 +440,7 @@ jobs:
           schema-file: ${{ steps.get-files.outputs.schema_file }}
 
       - name: Create Common Config Template
+        id: create-config
         if: steps.update-flags.outputs.update_config == 'true'
         uses: ./.github/actions/wo-create-config-template
         with:
@@ -435,9 +450,18 @@ jobs:
           description: "Common configuration template for shared settings"
           location: ${{ env.AZURE_LOCATION }}
 
+      - name: Check if files were created
+        id: check-created
+        run: |
+          if [[ "${{ steps.create-config.outputs.files_created }}" == "true" ]]; then
+            echo "files_created=true" >> $GITHUB_OUTPUT
+          else
+            echo "files_created=false" >> $GITHUB_OUTPUT
+          fi
+
   commit-generated-files:
     needs: [update-wo-artifacts, update_common_artifacts]
-    if: always() && (needs.update-wo-artifacts.result == 'success' || needs.update_common_artifacts.result == 'success')
+    if: always() && (needs.update-wo-artifacts.outputs.files_created == 'true' || needs.update_common_artifacts.outputs.files_created == 'true')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -445,19 +469,7 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
-      - name: Check for generated files
-        id: check-files
-        run: |
-          if ls .pg/apps/*/workload-orchestration/*/*.json 2>/dev/null || ls .pg/apps/common/*/*.json 2>/dev/null; then
-            echo "files_exist=true" >> $GITHUB_OUTPUT
-            echo "Found JSON files to commit"
-          else
-            echo "files_exist=false" >> $GITHUB_OUTPUT
-            echo "No JSON files found to commit"
-          fi
-
       - name: Commit solution template metadata files
-        if: steps.check-files.outputs.files_exist == 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Auto-generated solution template metadata files"

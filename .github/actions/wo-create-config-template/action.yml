@@ -1,6 +1,11 @@
 name: Create Workload Orchestration Config Template
 description: Creates an Azure Workload Orchestration Config Template using provided parameters
 
+outputs:
+  files_created:
+    description: 'Whether config template metadata files were created'
+    value: ${{ steps.create-metadata.outputs.files_created }}
+
 inputs:
   azure-credentials:
     description: 'Azure credentials for authentication'
@@ -118,6 +123,7 @@ runs:
         fi
 
     - name: Create Config Template Metadata
+      id: create-metadata
       if: env.CONFIG_CREATED == 'true'
       shell: bash
       run: |
@@ -143,3 +149,13 @@ runs:
         echo "  File: $JSON_FILE"
         echo "  Content:"
         cat "$JSON_FILE"
+        
+        # Set output to indicate files were created
+        echo "files_created=true" >> $GITHUB_OUTPUT
+
+    - name: Set No Files Created Output
+      id: no-files
+      if: env.CONFIG_CREATED != 'true'
+      shell: bash
+      run: |
+        echo "files_created=false" >> $GITHUB_OUTPUT

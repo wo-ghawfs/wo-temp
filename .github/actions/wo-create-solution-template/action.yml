@@ -1,6 +1,11 @@
 name: Create Workload Orchestration Solution Template
 description: Creates an Azure Workload Orchestration Solution Template using provided parameters
 
+outputs:
+  files_created:
+    description: 'Whether solution template metadata files were created'
+    value: ${{ steps.create-metadata.outputs.files_created }}
+
 inputs:
   app-name:
     description: 'Name of the application (folder name)'
@@ -172,6 +177,7 @@ runs:
         fi
 
     - name: Create Solution Template Metadata
+      id: create-metadata
       if: env.TEMPLATE_CREATED == 'true'
       shell: bash
       run: |
@@ -197,3 +203,13 @@ runs:
         echo "  File: $JSON_FILE"
         echo "  Content:"
         cat "$JSON_FILE"
+        
+        # Set output to indicate files were created
+        echo "files_created=true" >> $GITHUB_OUTPUT
+
+    - name: Set No Files Created Output
+      id: no-files
+      if: env.TEMPLATE_CREATED != 'true'
+      shell: bash
+      run: |
+        echo "files_created=false" >> $GITHUB_OUTPUT
