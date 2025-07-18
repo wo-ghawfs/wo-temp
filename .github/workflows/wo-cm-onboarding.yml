@@ -469,10 +469,5 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
-      - name: Commit solution template metadata files
+      - name: Commit changes
         uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Auto-generated solution template metadata files"
-          file_pattern: ".pg/apps/*/workload-orchestration/*/*.json .pg/apps/common/*/*.json"
-          commit_options: '--no-verify'
-          skip_dirty_check: true

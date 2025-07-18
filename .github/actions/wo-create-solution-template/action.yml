@@ -181,29 +181,48 @@ runs:
       if: env.TEMPLATE_CREATED == 'true'
       shell: bash
       run: |
-        # Create folder with solution template name
-        FOLDER_PATH=".pg/apps/${{ inputs.app-name }}/workload-orchestration/${{ env.TEMPLATE_NAME }}"
+        # Create folder for solutions
+        FOLDER_PATH=".pg/apps/${{ inputs.app-name }}/solutions"
         mkdir -p "$FOLDER_PATH"
         
-        # Create JSON file with version as filename
-        JSON_FILE="$FOLDER_PATH/${{ env.TEMPLATE_VERSION }}.json"
+        # Create YAML file named after solution template
+        YAML_FILE="$FOLDER_PATH/${{ env.TEMPLATE_NAME }}.yaml"
         
-        # Create JSON content with Azure resource IDs
-        cat > "$JSON_FILE" << EOF
-        {
-          "solutionTemplateId": "${{ env.SOLUTION_TEMPLATE_ID }}",
-          "solutionTemplateVersionId": "${{ env.SOLUTION_TEMPLATE_VERSION_ID }}",
-          "baseconfigfile": null,
-          "solutionInstance": []
-        }
-        EOF
-        
-        echo "Created solution template metadata:"
-        echo "  Folder: $FOLDER_PATH"
-        echo "  File: $JSON_FILE"
-        echo "  Content:"
-        cat "$JSON_FILE"
-        
+        # Check if YAML file already exists
+        if [ -f "$YAML_FILE" ]; then
+          echo "YAML file exists. Checking for existing version..."
+          
+          # Check if this version already exists
+          EXISTING_VERSION=$(yq eval ".versions[] | select(.version == \"${{ env.TEMPLATE_VERSION }}\") | .version" "$YAML_FILE" 2>/dev/null || echo "")
+          
+          if [ -n "$EXISTING_VERSION" ]; then
+            echo "Version ${{ env.TEMPLATE_VERSION }} already exists in $YAML_FILE. Skipping addition."
+          else
+            echo "Adding new version to existing YAML file..."
+            # Add new version to existing versions array
+            yq eval ".versions += [{\"version\": \"${{ env.TEMPLATE_VERSION }}\", \"solutionTemplateVersionId\": \"${{ env.SOLUTION_TEMPLATE_VERSION_ID }}\", \"revisions\": []}]" -i "$YAML_FILE"
+            echo "Added version ${{ env.TEMPLATE_VERSION }} to existing YAML file."
+          fi
+        else
+          echo "Creating new YAML file..."
+          # Create new YAML content with solution template info and first version
+          cat > "$YAML_FILE" << EOF
+          solutionTemplateName: "${{ env.TEMPLATE_NAME }}"
+          solutionTemplateId: "${{ env.SOLUTION_TEMPLATE_ID }}"
+          versions:
+            - version: "${{ env.TEMPLATE_VERSION }}"
+              solutionTemplateVersionId: "${{ env.SOLUTION_TEMPLATE_VERSION_ID }}"
+              revisions: []
+          EOF
+                    echo "Created new YAML file with first version."
+                  fi
+
+                  echo "Solution template metadata:"
+                  echo "  Folder: $FOLDER_PATH"
+                  echo "  File: $YAML_FILE"
+                  echo "  Content:"
+                  cat "$YAML_FILE"
+                  
         # Set output to indicate files were created
         echo "files_created=true" >> $GITHUB_OUTPUT
 
