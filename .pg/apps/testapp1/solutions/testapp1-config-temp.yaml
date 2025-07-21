@@ -1,0 +1,6 @@
+solutionTemplateName: testapp1-config-temp
+solutionTemplateId: /subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/jn-ghawf-euap/providers/Microsoft.Edge/solutionTemplates/testapp1-config-temp
+versions:
+  - version: 2.0.7
+    solutionTemplateVersionId: /subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/jn-ghawf-euap/providers/Microsoft.Edge/solutionTemplates/testapp1-config-temp/versions/2.0.7
+    revisions: []
