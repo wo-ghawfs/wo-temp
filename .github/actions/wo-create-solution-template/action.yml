@@ -205,15 +205,11 @@ runs:
           fi
         else
           echo "Creating new YAML file..."
-          # Create new YAML content with solution template info and first version
-          cat > "$YAML_FILE" << EOF
-solutionTemplateName: "$TEMPLATE_NAME"
-solutionTemplateId: "$SOLUTION_TEMPLATE_ID"
-versions:
-  - version: "$TEMPLATE_VERSION"
-    solutionTemplateVersionId: "$SOLUTION_TEMPLATE_VERSION_ID"
-    revisions: []
-EOF
+          # Create new YAML content with solution template info and first version using yq
+          yq eval -n '.solutionTemplateName = "'"$TEMPLATE_NAME"'"' > "$YAML_FILE"
+          yq eval '.solutionTemplateId = "'"$SOLUTION_TEMPLATE_ID"'"' -i "$YAML_FILE"
+          yq eval '.versions = []' -i "$YAML_FILE"
+          yq eval '.versions += [{"version": "'"$TEMPLATE_VERSION"'", "solutionTemplateVersionId": "'"$SOLUTION_TEMPLATE_VERSION_ID"'", "revisions": []}]' -i "$YAML_FILE"
           echo "Created new YAML file with first version."
         fi
 
