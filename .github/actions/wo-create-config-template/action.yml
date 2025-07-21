@@ -127,29 +127,44 @@ runs:
       if: env.CONFIG_CREATED == 'true'
       shell: bash
       run: |
-        # Create folder with config template name
-        FOLDER_PATH=".pg/apps/common/${{ env.CONFIG_NAME }}"
+        # Create folder for solutions
+        FOLDER_PATH=".pg/apps/common/solutions"
         mkdir -p "$FOLDER_PATH"
         
-        # Create JSON file with version as filename
-        JSON_FILE="$FOLDER_PATH/${{ env.CONFIG_VERSION }}.json"
+        # Create YAML file named after config template
+        YAML_FILE="$FOLDER_PATH/${{ env.CONFIG_NAME }}.yaml"
         
-        # Create JSON content with Azure resource IDs
-        cat > "$JSON_FILE" << EOF
-        {
-          "configTemplateId": "${{ env.CONFIG_TEMPLATE_ID }}",
-          "configTemplateVersionId": "${{ env.CONFIG_TEMPLATE_VERSION_ID }}",
-          "baseconfigfile": null,
-          "solutionInstance": []
-        }
-        EOF
-        
-        echo "Created config template metadata:"
+        # Check if YAML file already exists
+        if [ -f "$YAML_FILE" ]; then
+          echo "YAML file exists. Checking for existing version..."
+          
+          # Check if this version already exists
+          EXISTING_VERSION=$(yq eval ".versions[] | select(.version == \"${{ env.CONFIG_VERSION }}\") | .version" "$YAML_FILE" 2>/dev/null || echo "")
+          
+          if [ -n "$EXISTING_VERSION" ]; then
+            echo "Version ${{ env.CONFIG_VERSION }} already exists in $YAML_FILE. Skipping addition."
+          else
+            echo "Adding new version to existing YAML file..."
+            # Add new version to existing versions array
+            yq eval ".versions += [{\"version\": \"${{ env.CONFIG_VERSION }}\", \"configTemplateVersionId\": \"${{ env.CONFIG_TEMPLATE_VERSION_ID }}\", \"revisions\": []}]" -i "$YAML_FILE"
+            echo "Added version ${{ env.CONFIG_VERSION }} to existing YAML file."
+          fi
+        else
+          echo "Creating new YAML file..."
+          # Create new YAML content with config template info and first version using yq
+          yq eval -n '.configTemplateName = "'"${{ env.CONFIG_NAME }}"'"' > "$YAML_FILE"
+          yq eval '.configTemplateId = "'"${{ env.CONFIG_TEMPLATE_ID }}"'"' -i "$YAML_FILE"
+          yq eval '.versions = []' -i "$YAML_FILE"
+          yq eval '.versions += [{"version": "'"${{ env.CONFIG_VERSION }}"'", "configTemplateVersionId": "'"${{ env.CONFIG_TEMPLATE_VERSION_ID }}"'", "revisions": []}]' -i "$YAML_FILE"
+          echo "Created new YAML file with first version."
+        fi
+
+        echo "Config template metadata:"
         echo "  Folder: $FOLDER_PATH"
-        echo "  File: $JSON_FILE"
+        echo "  File: $YAML_FILE"
         echo "  Content:"
-        cat "$JSON_FILE"
-        
+        cat "$YAML_FILE"
+                  
         # Set output to indicate files were created
         echo "files_created=true" >> $GITHUB_OUTPUT
 
