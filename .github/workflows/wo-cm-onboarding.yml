@@ -324,7 +324,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: generated-artifacts-${{ matrix.app_name }}
-          path: .pg/**
+          path: .pg/apps/${{ matrix.app_name }}/solutions/
           retention-days: 1
 
   update_common_artifacts:
@@ -494,19 +494,12 @@ jobs:
           path: downloaded-artifacts
           merge-multiple: true
 
-      - name: Copy artifacts to repository
+      - name: Move downloaded files into working directory
         run: |
-          if [ -d "downloaded-artifacts" ]; then
-            cp -r downloaded-artifacts/.pg/* .pg/ 2>/dev/null || echo "No .pg files to copy"
-            find downloaded-artifacts -name "*.yaml" -o -name "*.json" | while read file; do
-              rel_path=$(echo "$file" | sed 's|downloaded-artifacts/||')
-              mkdir -p "$(dirname "$rel_path")"
-              cp "$file" "$rel_path"
-            done
-          fi
+          echo "Copying downloaded artifacts into repo..."
+          cp -r downloaded-artifacts/.pg/. .pg/ || echo "No .pg files found in artifacts"
 
       - name: Commit all generated files
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Generated workload orchestration artifacts"
-          file_pattern: ".pg/**"
