@@ -326,6 +326,7 @@ jobs:
           name: generated-artifacts-${{ matrix.app_name }}
           path: .pg/apps/${{ matrix.app_name }}/solutions/
           retention-days: 1
+          if-no-files-found: warn
 
   update_common_artifacts:
     needs: update-context
@@ -474,8 +475,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: generated-artifacts-common
-          path: .pg/**
+          path: .pg/apps/common/solutions/
           retention-days: 1
+          if-no-files-found: warn
 
   commit-generated-files:
     needs: [update-wo-artifacts, update_common_artifacts]
@@ -492,12 +494,44 @@ jobs:
         with:
           pattern: generated-artifacts-*
           path: downloaded-artifacts
-          merge-multiple: true
 
-      - name: Move downloaded files into working directory
+      - name: Process and copy artifacts to correct locations
         run: |
-          echo "Copying downloaded artifacts into repo..."
-          cp -r downloaded-artifacts/.pg/. .pg/ || echo "No .pg files found in artifacts"
+          echo "Processing downloaded artifacts..."
+          
+          # Create solutions directories if they don't exist
+          mkdir -p .pg/apps/common/solutions
+          
+          # Process each artifact
+          for artifact_dir in downloaded-artifacts/generated-artifacts-*; do
+            if [ -d "$artifact_dir" ]; then
+              artifact_name=$(basename "$artifact_dir")
+              echo "Processing $artifact_name"
+              
+              if [[ "$artifact_name" == "generated-artifacts-common" ]]; then
+                # Copy common solutions
+                if [ -d "$artifact_dir" ]; then
+                  cp -r "$artifact_dir"/* .pg/apps/common/solutions/ 2>/dev/null || echo "No files to copy for common"
+                fi
+              else
+                # Extract app name from artifact name
+                app_name=${artifact_name#generated-artifacts-}
+                echo "Processing app: $app_name"
+                
+                # Create app solutions directory
+                mkdir -p ".pg/apps/$app_name/solutions"
+                
+                # Copy app solutions
+                if [ -d "$artifact_dir" ]; then
+                  cp -r "$artifact_dir"/* ".pg/apps/$app_name/solutions/" 2>/dev/null || echo "No files to copy for $app_name"
+                fi
+              fi
+            fi
+          done
+          
+          # List what was copied for debugging
+          echo "Files copied:"
+          find .pg -name "*.json" -o -name "*.yaml" | head -20
 
       - name: Commit all generated files
         uses: stefanzweifel/git-auto-commit-action@v5
