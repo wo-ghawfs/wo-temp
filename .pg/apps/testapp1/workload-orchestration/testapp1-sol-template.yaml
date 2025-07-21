@@ -1,6 +1,6 @@
 metadata:
   name: testapp1-config-temp
-  version: 2.0.6
+  version: 2.0.7
 schema:
   name: testapp1-sch
   version: 2.0.5
