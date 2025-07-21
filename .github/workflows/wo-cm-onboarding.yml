@@ -312,11 +312,20 @@ jobs:
       - name: Check if files were created
         id: check-created
         run: |
-          if [[ "${{ steps.create-template.outputs.files_created }}" == "true" ]]; then
+          # Check if any files were created (either schema or template)
+          if [[ "${{ steps.create-template.outputs.files_created }}" == "true" ]] || [[ "${{ steps.update-flags.outputs.create_schema }}" == "true" ]]; then
             echo "files_created=true" >> $GITHUB_OUTPUT
           else
             echo "files_created=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Upload generated files
+        if: steps.check-created.outputs.files_created == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-artifacts-${{ matrix.app_name }}
+          path: .pg/**
+          retention-days: 1
 
   update_common_artifacts:
     needs: update-context
@@ -453,11 +462,20 @@ jobs:
       - name: Check if files were created
         id: check-created
         run: |
-          if [[ "${{ steps.create-config.outputs.files_created }}" == "true" ]]; then
+          # Check if any files were created (either schema or config)
+          if [[ "${{ steps.create-config.outputs.files_created }}" == "true" ]] || [[ "${{ steps.update-flags.outputs.update_schema }}" == "true" ]]; then
             echo "files_created=true" >> $GITHUB_OUTPUT
           else
             echo "files_created=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Upload generated files
+        if: steps.check-created.outputs.files_created == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-artifacts-common
+          path: .pg/**
+          retention-days: 1
 
   commit-generated-files:
     needs: [update-wo-artifacts, update_common_artifacts]
@@ -469,5 +487,26 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
-      - name: Commit changes
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: generated-artifacts-*
+          path: downloaded-artifacts
+          merge-multiple: true
+
+      - name: Copy artifacts to repository
+        run: |
+          if [ -d "downloaded-artifacts" ]; then
+            cp -r downloaded-artifacts/.pg/* .pg/ 2>/dev/null || echo "No .pg files to copy"
+            find downloaded-artifacts -name "*.yaml" -o -name "*.json" | while read file; do
+              rel_path=$(echo "$file" | sed 's|downloaded-artifacts/||')
+              mkdir -p "$(dirname "$rel_path")"
+              cp "$file" "$rel_path"
+            done
+          fi
+
+      - name: Commit all generated files
         uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Generated workload orchestration artifacts"
+          file_pattern: ".pg/**"
