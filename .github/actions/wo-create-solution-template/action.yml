@@ -207,21 +207,21 @@ runs:
           echo "Creating new YAML file..."
           # Create new YAML content with solution template info and first version
           cat > "$YAML_FILE" << EOF
-          solutionTemplateName: "${{ env.TEMPLATE_NAME }}"
-          solutionTemplateId: "${{ env.SOLUTION_TEMPLATE_ID }}"
-          versions:
-            - version: "${{ env.TEMPLATE_VERSION }}"
-              solutionTemplateVersionId: "${{ env.SOLUTION_TEMPLATE_VERSION_ID }}"
-              revisions: []
-          EOF
-                    echo "Created new YAML file with first version."
-                  fi
+solutionTemplateName: "${{ env.TEMPLATE_NAME }}"
+solutionTemplateId: "${{ env.SOLUTION_TEMPLATE_ID }}"
+versions:
+  - version: "${{ env.TEMPLATE_VERSION }}"
+    solutionTemplateVersionId: "${{ env.SOLUTION_TEMPLATE_VERSION_ID }}"
+    revisions: []
+EOF
+          echo "Created new YAML file with first version."
+        fi
 
-                  echo "Solution template metadata:"
-                  echo "  Folder: $FOLDER_PATH"
-                  echo "  File: $YAML_FILE"
-                  echo "  Content:"
-                  cat "$YAML_FILE"
+        echo "Solution template metadata:"
+        echo "  Folder: $FOLDER_PATH"
+        echo "  File: $YAML_FILE"
+        echo "  Content:"
+        cat "$YAML_FILE"
                   
         # Set output to indicate files were created
         echo "files_created=true" >> $GITHUB_OUTPUT
