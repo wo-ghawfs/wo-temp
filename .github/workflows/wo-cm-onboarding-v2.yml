@@ -119,7 +119,7 @@ jobs:
           CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
           
           # Process each changed file - ONLY process versioned files
-          echo "$CHANGED_FILES" | while IFS= read -r file; do
+          while IFS= read -r file; do
             # Only process files in versioned subdirectories
             if [[ "$file" =~ ^\.pg/apps/([^/]+)/workload-orchestration/(schemas|solution-templates)/([0-9]+\.[0-9]+\.[0-9]+)/ ]]; then
               app_name="${BASH_REMATCH[1]}"
@@ -145,7 +145,7 @@ jobs:
                 APP_CHANGES=$(echo "$APP_CHANGES" | jq --arg app "$app_name" --arg version "$version" '.[$app].solution_templates |= if . | index($version) then . else . + [$version] end')
               fi
             fi
-          done
+          done <<< "$CHANGED_FILES"
           
           # Write to temporary file and read back (to handle while loop subshell issue)
           echo "$APP_CHANGES" > /tmp/app_changes.json
