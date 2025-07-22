@@ -1,7 +1,7 @@
 metadata:
   name: testapp3-config-temp
   version: 1.0.0
-schema:
+schema: 
   name: testapp3-sch
   version: 1.0.0
 configs:

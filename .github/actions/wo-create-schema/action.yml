@@ -61,6 +61,7 @@ runs:
       id: process-schemas
       shell: bash
       run: |
+        # Initialize counters in main shell
         SCHEMAS_CREATED=0
         SCHEMAS_SKIPPED=0
         SCHEMAS_FAILED=0
@@ -79,8 +80,8 @@ runs:
         
         echo "Schema files to process: $SCHEMA_FILES"
         
-        # Process each schema file
-        echo "$SCHEMA_FILES" | jq -r '.[]' | while read -r schema_file; do
+        # Process each schema file using process substitution to avoid subshell issues
+        while IFS= read -r schema_file; do
           echo ""
           echo "📄 Processing schema file: $schema_file"
           
@@ -175,26 +176,7 @@ runs:
           fi
           
           TOTAL_PROCESSED=$((TOTAL_PROCESSED + 1))
-        done
-        
-        # Write counters and data to temp files to avoid subshell issues
-        echo "$SCHEMAS_CREATED" > /tmp/schemas_created.txt
-        echo "$SCHEMAS_SKIPPED" > /tmp/schemas_skipped.txt
-        echo "$SCHEMAS_FAILED" > /tmp/schemas_failed.txt
-        echo "$TOTAL_PROCESSED" > /tmp/total_processed.txt
-        echo "$FAILED_SCHEMAS_DETAILS" > /tmp/failed_schemas_details.json
-        echo "$SKIPPED_SCHEMAS_DETAILS" > /tmp/skipped_schemas_details.json
-
-    - name: Set Outputs
-      shell: bash
-      run: |
-        # Read counters from temp files
-        SCHEMAS_CREATED=$(cat /tmp/schemas_created.txt 2>/dev/null || echo "0")
-        SCHEMAS_SKIPPED=$(cat /tmp/schemas_skipped.txt 2>/dev/null || echo "0")
-        SCHEMAS_FAILED=$(cat /tmp/schemas_failed.txt 2>/dev/null || echo "0")
-        TOTAL_PROCESSED=$(cat /tmp/total_processed.txt 2>/dev/null || echo "0")
-        FAILED_SCHEMAS_DETAILS=$(cat /tmp/failed_schemas_details.json 2>/dev/null || echo "[]")
-        SKIPPED_SCHEMAS_DETAILS=$(cat /tmp/skipped_schemas_details.json 2>/dev/null || echo "[]")
+        done < <(echo "$SCHEMA_FILES" | jq -r '.[]')
         
         # Compact JSON for output
         FAILED_SCHEMAS_COMPACT=$(echo "$FAILED_SCHEMAS_DETAILS" | jq -c .)
@@ -232,6 +214,3 @@ runs:
           echo "🔍 Detailed Error Information:"
           echo "$FAILED_SCHEMAS_DETAILS" | jq -r '.[] | "   File: \(.file)\n   Schema: \(.["schema-name"]) v\(.version)\n   Error: \(.error)\n   Details: \(.["error-details"])\n"'
         fi
-        
-        # Clean up temp files
-        rm -f /tmp/schemas_created.txt /tmp/schemas_skipped.txt /tmp/schemas_failed.txt /tmp/total_processed.txt /tmp/failed_schemas_details.json /tmp/skipped_schemas_details.json
