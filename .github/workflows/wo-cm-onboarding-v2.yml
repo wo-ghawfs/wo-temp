@@ -278,6 +278,7 @@ jobs:
           CREATE_TEMPLATE="false"
           SCHEMA_FILES=()
           TEMPLATE_FILES=()
+          SPEC_FILES=()
           
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             # For manual runs, find ALL versioned files for the specified actions
@@ -301,14 +302,32 @@ jobs:
             case "${{ github.event.inputs.action }}" in
               "create-soln-template"|"all")
                 CREATE_TEMPLATE="true"
-                # Find all versioned solution template files
+                # Find all versioned solution template files and their corresponding spec files
                 if [[ -d "$BASE_PATH/solution-templates" ]]; then
                   for version_dir in "$BASE_PATH/solution-templates"/*/ ; do
                     if [[ -d "$version_dir" && "$(basename "$version_dir")" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                      # Find template file
+                      TEMPLATE_FILE=""
                       if [[ -f "$version_dir/${{ matrix.app_name }}-sol-template.yaml" ]]; then
-                        TEMPLATE_FILES+=("$version_dir/${{ matrix.app_name }}-sol-template.yaml")
+                        TEMPLATE_FILE="$version_dir/${{ matrix.app_name }}-sol-template.yaml"
                       elif [[ -f "$version_dir/sol-template.yaml" ]]; then
-                        TEMPLATE_FILES+=("$version_dir/sol-template.yaml")
+                        TEMPLATE_FILE="$version_dir/sol-template.yaml"
+                      fi
+                      
+                      # Find corresponding spec file
+                      SPEC_FILE=""
+                      if [[ -f "$version_dir/${{ matrix.app_name }}-specs.json" ]]; then
+                        SPEC_FILE="$version_dir/${{ matrix.app_name }}-specs.json"
+                      elif [[ -f "$version_dir/specs.json" ]]; then
+                        SPEC_FILE="$version_dir/specs.json"
+                      fi
+                      
+                      # Only add if both files exist
+                      if [[ -n "$TEMPLATE_FILE" && -n "$SPEC_FILE" ]]; then
+                        TEMPLATE_FILES+=("$TEMPLATE_FILE")
+                        SPEC_FILES+=("$SPEC_FILE")
+                      elif [[ -n "$TEMPLATE_FILE" ]]; then
+                        echo "⚠️ Warning: Template file found but no spec file: $TEMPLATE_FILE"
                       fi
                     fi
                   done
@@ -344,12 +363,30 @@ jobs:
               if [[ -n "$TEMPLATE_VERSIONS" ]]; then
                 CREATE_TEMPLATE="true"
                 
-                # Add versioned solution template files
+                # Add versioned solution template files and their spec files
                 for version in $TEMPLATE_VERSIONS; do
+                  # Find template file
+                  TEMPLATE_FILE=""
                   if [[ -f "$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-sol-template.yaml" ]]; then
-                    TEMPLATE_FILES+=("$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-sol-template.yaml")
+                    TEMPLATE_FILE="$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-sol-template.yaml"
                   elif [[ -f "$BASE_PATH/solution-templates/$version/sol-template.yaml" ]]; then
-                    TEMPLATE_FILES+=("$BASE_PATH/solution-templates/$version/sol-template.yaml")
+                    TEMPLATE_FILE="$BASE_PATH/solution-templates/$version/sol-template.yaml"
+                  fi
+                  
+                  # Find corresponding spec file
+                  SPEC_FILE=""
+                  if [[ -f "$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-specs.json" ]]; then
+                    SPEC_FILE="$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-specs.json"
+                  elif [[ -f "$BASE_PATH/solution-templates/$version/specs.json" ]]; then
+                    SPEC_FILE="$BASE_PATH/solution-templates/$version/specs.json"
+                  fi
+                  
+                  # Only add if both files exist
+                  if [[ -n "$TEMPLATE_FILE" && -n "$SPEC_FILE" ]]; then
+                    TEMPLATE_FILES+=("$TEMPLATE_FILE")
+                    SPEC_FILES+=("$SPEC_FILE")
+                  elif [[ -n "$TEMPLATE_FILE" ]]; then
+                    echo "⚠️ Warning: Template file found but no spec file: $TEMPLATE_FILE"
                   fi
                 done
               fi
@@ -359,16 +396,19 @@ jobs:
           # Convert arrays to JSON
           SCHEMA_FILES_JSON=$(printf '%s\n' "${SCHEMA_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
           TEMPLATE_FILES_JSON=$(printf '%s\n' "${TEMPLATE_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          SPEC_FILES_JSON=$(printf '%s\n' "${SPEC_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
           
           # Set outputs
           echo "create_schema=$CREATE_SCHEMA" >> $GITHUB_OUTPUT
           echo "create_template=$CREATE_TEMPLATE" >> $GITHUB_OUTPUT
           echo "schema_files=$SCHEMA_FILES_JSON" >> $GITHUB_OUTPUT
           echo "template_files=$TEMPLATE_FILES_JSON" >> $GITHUB_OUTPUT
+          echo "spec_files=$SPEC_FILES_JSON" >> $GITHUB_OUTPUT
           
           echo "Actions for ${{ matrix.app_name }}: schema=$CREATE_SCHEMA, template=$CREATE_TEMPLATE"
           echo "Schema files: $SCHEMA_FILES_JSON"
           echo "Template files: $TEMPLATE_FILES_JSON"
+          echo "Spec files: $SPEC_FILES_JSON"
 
       - name: Create App Schemas (Versioned Only)
         id: create-schemas
@@ -414,102 +454,14 @@ jobs:
       - name: Create App Solution Templates (Versioned Only)
         id: create-templates
         if: steps.detect-actions.outputs.create_template == 'true'
-        run: |
-          TEMPLATE_FILES='${{ steps.detect-actions.outputs.template_files }}'
-          FILES_CREATED=false
-          
-          # Process each versioned template file
-          echo "$TEMPLATE_FILES" | jq -r '.[]' | while read -r template_file; do
-            echo "Creating solution template for versioned file: $template_file"
-            
-            # Find corresponding specs file and metadata file
-            TEMPLATE_DIR=$(dirname "$template_file")
-            
-            # Look for specs file in the same versioned directory
-            SPECS_FILE=""
-            if [[ -f "$TEMPLATE_DIR/${{ matrix.app_name }}-specs.json" ]]; then
-              SPECS_FILE="$TEMPLATE_DIR/${{ matrix.app_name }}-specs.json"
-            elif [[ -f "$TEMPLATE_DIR/specs.json" ]]; then
-              SPECS_FILE="$TEMPLATE_DIR/specs.json"
-            fi
-            
-            # Metadata file is always in the root
-            METADATA_FILE=".pg/apps/${{ matrix.app_name }}/workload-orchestration/metadata.yaml"
-            
-            if [[ -n "$SPECS_FILE" && -f "$SPECS_FILE" && -f "$METADATA_FILE" ]]; then
-              echo "Using specs file: $SPECS_FILE"
-              echo "Using metadata file: $METADATA_FILE"
-              
-              # Read template metadata
-              TEMPLATE_NAME=$(yq eval '.metadata.name' "$template_file")
-              TEMPLATE_VERSION=$(yq eval '.metadata.version' "$template_file")
-              SCHEMA_NAME=$(yq eval '.schema.name' "$template_file")
-              SCHEMA_VERSION=$(yq eval '.schema.version' "$template_file")
-              TEMPLATE_DESCRIPTION=$(yq eval '.description' "$METADATA_FILE")
-              TEMPLATE_CAPABILITIES="[$(yq eval '.capabilities[]' "$METADATA_FILE" | tr '\n' ',' | sed 's/,$//')]"
-              TEMPLATE_ENABLE_VALIDATION=$(yq eval '.enable-external-validation' "$METADATA_FILE")
-              
-              echo "Processing template: $TEMPLATE_NAME version $TEMPLATE_VERSION"
-              
-              # Check if schema version exists
-              if ! az workload-orchestration schema version show -g "$AZURE_RESOURCE_GROUP" --schema-name "$SCHEMA_NAME" -v "$SCHEMA_VERSION" >/dev/null 2>&1; then
-                echo "Error: Schema version $SCHEMA_VERSION does not exist for schema $SCHEMA_NAME"
-                echo "Please ensure the schema and version exist before creating the solution template."
-                continue
-              fi
-              
-              # Check if solution template version already exists
-              if ! az workload-orchestration solution-template version show -g "$AZURE_RESOURCE_GROUP" --solution-template-name "$TEMPLATE_NAME" -v "$TEMPLATE_VERSION" >/dev/null 2>&1; then
-                echo "Solution template version not found. Creating new version..."
-                
-                RESPONSE=$(az workload-orchestration solution-template create \
-                  -g "$AZURE_RESOURCE_GROUP" \
-                  -l "$AZURE_LOCATION" \
-                  --capabilities "$TEMPLATE_CAPABILITIES" \
-                  --configuration-template-file "$template_file" \
-                  --specification "$SPECS_FILE" \
-                  --description "$TEMPLATE_DESCRIPTION" \
-                  --enable-external-validation "$TEMPLATE_ENABLE_VALIDATION" \
-                  --output json)
-                
-                echo "✅ Created solution template: $TEMPLATE_NAME version $TEMPLATE_VERSION"
-                FILES_CREATED=true
-                
-                # Extract resource IDs and create metadata (similar to original action)
-                SOLUTION_TEMPLATE_ID=$(echo "$RESPONSE" | jq -r '.properties.solutionTemplateId // empty')
-                SOLUTION_TEMPLATE_VERSION_ID=$(echo "$RESPONSE" | jq -r '.properties.solutionTemplateVersionId // empty')
-                
-                # Create solution template metadata
-                FOLDER_PATH=".pg/apps/${{ matrix.app_name }}/solutions"
-                mkdir -p "$FOLDER_PATH"
-                YAML_FILE="$FOLDER_PATH/$TEMPLATE_NAME.yaml"
-                
-                if [[ -f "$YAML_FILE" ]]; then
-                  # Check if this version already exists
-                  EXISTING_VERSION=$(yq eval ".versions[] | select(.version == \"$TEMPLATE_VERSION\") | .version" "$YAML_FILE" 2>/dev/null || echo "")
-                  
-                  if [[ -z "$EXISTING_VERSION" ]]; then
-                    echo "Adding new version to existing YAML file..."
-                    yq eval ".versions += [{\"version\": \"$TEMPLATE_VERSION\", \"solutionTemplateVersionId\": \"$SOLUTION_TEMPLATE_VERSION_ID\", \"revisions\": []}]" -i "$YAML_FILE"
-                  fi
-                else
-                  echo "Creating new YAML file..."
-                  yq eval -n '.solutionTemplateName = "'"$TEMPLATE_NAME"'"' > "$YAML_FILE"
-                  yq eval '.solutionTemplateId = "'"$SOLUTION_TEMPLATE_ID"'"' -i "$YAML_FILE"
-                  yq eval '.versions = []' -i "$YAML_FILE"
-                  yq eval '.versions += [{"version": "'"$TEMPLATE_VERSION"'", "solutionTemplateVersionId": "'"$SOLUTION_TEMPLATE_VERSION_ID"'", "revisions": []}]' -i "$YAML_FILE"
-                fi
-              else
-                echo "✅ Solution template version already exists. Skipping creation."
-              fi
-            else
-              echo "❌ Missing required files for template: $template_file"
-              echo "  Specs file: $SPECS_FILE (exists: $(test -f "$SPECS_FILE" && echo yes || echo no))"
-              echo "  Metadata file: $METADATA_FILE (exists: $(test -f "$METADATA_FILE" && echo yes || echo no))"
-            fi
-          done
-          
-          echo "files_created=$FILES_CREATED" >> $GITHUB_OUTPUT
+        uses: ./.github/actions/wo-create-solution-template
+        with:
+          app-name: ${{ matrix.app_name }}
+          resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+          location: ${{ env.AZURE_LOCATION }}
+          template-files: ${{ steps.detect-actions.outputs.template_files }}
+          specification-files: ${{ steps.detect-actions.outputs.spec_files }}
+          metadata-file: .pg/apps/${{ matrix.app_name }}/workload-orchestration/metadata.yaml
 
       - name: Check if files were created
         id: check-created
