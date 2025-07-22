@@ -1,0 +1,865 @@
+name: wo-cm-onboarding-v2
+
+on:
+  push:
+    branches:
+      - main
+    paths: 
+      - '.pg/**/workload-orchestration/**'
+      - '.pg/apps/common/**'
+  workflow_run:
+      workflows: ["WO-SYNC-VERSIONS"]
+      types:
+        - completed
+
+  workflow_dispatch:
+    inputs:
+      update_common:
+        type: choice
+        description: 'Choose what common resources to update'
+        default: none
+        options:
+        - none
+        - schema-only
+        - config-only
+        - all
+        required: true
+      action:
+        type: choice
+        description: Choose app resources to update
+        default: none
+        options:
+        - none
+        - create-schema
+        - create-soln-template
+        - all
+        required: true
+      apps:
+        type: string
+        description: 'Comma-separated list of apps to update (e.g., testapp1,testapp2)'
+        default: null
+      usesiterg:
+        type: string
+        description: 'RG OVERRIDE - Leave empty to use default from wo-common.yaml'
+        default: ""
+
+permissions:
+  id-token: write # 
+  contents: write # for actions/checkout
+
+jobs:
+  update-context:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Azure Login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - uses: actions/checkout@v4
+
+      - name: Source composite actions
+        uses: ./.github/actions/wo-utilities/
+        with:
+          utilities: "yq"
+
+      - name: Install Workload Orchestration Extension
+        uses: ./.github/actions/wo-install-wo-extension
+
+      - name: Update Context
+        uses: ./.github/actions/wo-update-context
+
+  detect-apps-resources-to-update:
+    needs: update-context
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ github.event_name == 'workflow_dispatch' && steps.app-list-dispatch.outputs.apps || steps.app-list.outputs.apps }}
+      app_changes: ${{ steps.detect-changes.outputs.app_changes }}
+    steps:
+      - name: Git Info
+        id: check-author
+        run: |
+          echo "Actor: ${{ github.actor }}"
+          echo "Event: ${{ github.event_name }}"
+
+      - uses: actions/checkout@v4
+      - name: Check changed files
+        if: github.event_name == 'push' || github.event_name == 'workflow_run'
+        id: changed-files
+        uses: ./.github/actions/wo-changed-files
+        with:
+          files: .pg/**/*
+          
+      - name: Extract apps with changes
+        if: github.event_name == 'push' || github.event_name == 'workflow_run'
+        id: app-list
+        run: |
+          # Get all changed files and extract unique app names
+          APPS=$(echo "${{ steps.changed-files.outputs.all_changed_files }}" | 
+                 grep -o '\.pg/apps/[^/]*/' | 
+                 sed 's/\.pg\/apps\///' | 
+                 sed 's/\///' | 
+                 grep -v '^common$' | 
+                 sort -u | 
+                 jq -R -s -c 'split("\n")[:-1]')
+          echo "apps=$APPS" >> $GITHUB_OUTPUT
+
+      - name: Detect versioned file changes only
+        if: github.event_name == 'push' || github.event_name == 'workflow_run'
+        id: detect-changes
+        run: |
+          # Initialize app changes object
+          APP_CHANGES="{}"
+          
+          # Get all changed files
+          CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+          
+          # Process each changed file - ONLY process versioned files
+          echo "$CHANGED_FILES" | while IFS= read -r file; do
+            # Only process files in versioned subdirectories
+            if [[ "$file" =~ ^\.pg/apps/([^/]+)/workload-orchestration/(schemas|solution-templates)/([0-9]+\.[0-9]+\.[0-9]+)/ ]]; then
+              app_name="${BASH_REMATCH[1]}"
+              folder_type="${BASH_REMATCH[2]}"
+              version="${BASH_REMATCH[3]}"
+              
+              # Skip common app processing here (handled separately)
+              if [[ "$app_name" == "common" ]]; then
+                continue
+              fi
+              
+              echo "Found versioned change: $app_name/$folder_type/$version - $file"
+              
+              # Initialize app entry if it doesn't exist
+              if [[ $(echo "$APP_CHANGES" | jq -r --arg app "$app_name" '.[$app]') == "null" ]]; then
+                APP_CHANGES=$(echo "$APP_CHANGES" | jq --arg app "$app_name" '.[$app] = {"schemas": [], "solution_templates": []}')
+              fi
+              
+              # Update the appropriate versioned array
+              if [[ "$folder_type" == "schemas" ]]; then
+                APP_CHANGES=$(echo "$APP_CHANGES" | jq --arg app "$app_name" --arg version "$version" '.[$app].schemas |= if . | index($version) then . else . + [$version] end')
+              elif [[ "$folder_type" == "solution-templates" ]]; then
+                APP_CHANGES=$(echo "$APP_CHANGES" | jq --arg app "$app_name" --arg version "$version" '.[$app].solution_templates |= if . | index($version) then . else . + [$version] end')
+              fi
+            fi
+          done
+          
+          # Write to temporary file and read back (to handle while loop subshell issue)
+          echo "$APP_CHANGES" > /tmp/app_changes.json
+          APP_CHANGES_FINAL=$(cat /tmp/app_changes.json)
+          
+          echo "app_changes=$APP_CHANGES_FINAL" >> $GITHUB_OUTPUT
+          echo "Detected versioned app changes:"
+          echo "$APP_CHANGES_FINAL" | jq .
+
+      - name: Extract and validate apps for update
+        if: github.event_name == 'workflow_dispatch'
+        id: app-list-dispatch
+        run: |
+          echo "Validating apps from input list for update..."
+          APPS_INPUT="${{ github.event.inputs.apps }}"
+          
+          # Handle empty or whitespace-only input
+          if [[ -z "${APPS_INPUT// }" ]]; then
+            echo "⚠️ Empty app list provided"
+            echo "apps=[]" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          VALID_APPS=()
+
+          # Process each app
+          IFS=',' read -ra APP_LIST <<< "$APPS_INPUT"
+          for app in "${APP_LIST[@]}"; do
+            # Trim whitespace
+            app=$(echo "$app" | xargs)
+            
+            # Validate app directory exists
+            if [[ -d ".pg/apps/$app" ]]; then
+              VALID_APPS+=("$app")
+              echo "✅ Validated app: $app"
+            else
+              echo "❌ Warning: Directory .pg/apps/$app does not exist, skipping"
+            fi
+          done
+
+          # Convert validated apps to JSON array
+          APPS=$(printf '%s\n' "${VALID_APPS[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          echo "apps=$APPS" >> $GITHUB_OUTPUT
+          echo "✅ Final app list: $APPS"
+
+  validate-versioned-changes:
+    needs: [detect-apps-resources-to-update, update-context]
+    if: ${{ needs.detect-apps-resources-to-update.outputs.app_changes != '{}' && github.event_name != 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    outputs:
+      validation_errors: ${{ steps.validate-versions.outputs.validation_errors }}
+      has_errors: ${{ steps.validate-versions.outputs.has_errors }}
+    steps:
+      - name: Azure Login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - uses: actions/checkout@v4
+
+      - name: Source composite actions
+        uses: ./.github/actions/wo-utilities/
+        with:
+          utilities: "yq"
+
+      - name: Read Azure config from wo-common.yaml
+        run: |
+          # Read default values from wo-common.yaml
+          DEFAULT_RG=$(yq eval '.common.rg' .pg/sites/common/wo-common.yaml)
+          DEFAULT_LOC=$(yq eval '.common.location' .pg/sites/common/wo-common.yaml)
+          
+          # Use the default from config (no override available in validation)
+          AZURE_RG="$DEFAULT_RG"
+          AZURE_LOC="$DEFAULT_LOC"
+          
+          echo "AZURE_RESOURCE_GROUP=$AZURE_RG" >> $GITHUB_ENV
+          echo "AZURE_LOCATION=$AZURE_LOC" >> $GITHUB_ENV
+          echo "Azure config - RG: $AZURE_RG, Location: $AZURE_LOC"
+
+      - name: Install Workload Orchestration Extension
+        uses: ./.github/actions/wo-install-wo-extension
+
+      - name: Validate versioned changes
+        id: validate-versions
+        run: |
+          APP_CHANGES='${{ needs.detect-apps-resources-to-update.outputs.app_changes }}'
+          VALIDATION_ERRORS=()
+          HAS_ERRORS=false
+          
+          echo "Validating versioned changes..."
+          echo "App changes: $APP_CHANGES"
+          
+          # Process each app
+          for app in $(echo "$APP_CHANGES" | jq -r 'keys[]'); do
+            echo "Validating app: $app"
+            
+            # Check versioned schemas
+            VERSIONED_SCHEMAS=$(echo "$APP_CHANGES" | jq -r --arg app "$app" '.[$app].schemas[]?' 2>/dev/null || true)
+            for version in $VERSIONED_SCHEMAS; do
+              echo "Checking schema version: $app v$version"
+              
+              # Find the schema file for this version
+              SCHEMA_FILE=".pg/apps/$app/workload-orchestration/schemas/$version/${app}-schema.yaml"
+              if [[ ! -f "$SCHEMA_FILE" ]]; then
+                # Try alternative naming pattern
+                SCHEMA_FILE=".pg/apps/$app/workload-orchestration/schemas/$version/schema.yaml"
+              fi
+              
+              if [[ -f "$SCHEMA_FILE" ]]; then
+                SCHEMA_NAME=$(yq eval '.metadata.name' "$SCHEMA_FILE" 2>/dev/null || echo "")
+                if [[ -n "$SCHEMA_NAME" ]]; then
+                  # Check if version exists in Config Manager
+                  if az workload-orchestration schema version show -g "$AZURE_RESOURCE_GROUP" --schema-name "$SCHEMA_NAME" -v "$version" >/dev/null 2>&1; then
+                    ERROR="Schema version $version already exists for $SCHEMA_NAME in Config Manager. Please create a new version for any changes."
+                    VALIDATION_ERRORS+=("$ERROR")
+                    HAS_ERRORS=true
+                    echo "❌ $ERROR"
+                  else
+                    echo "✅ Schema version $version for $SCHEMA_NAME is valid (new version)"
+                  fi
+                else
+                  echo "⚠️  Could not read schema name from $SCHEMA_FILE"
+                fi
+              else
+                echo "⚠️  Schema file not found for $app version $version"
+              fi
+            done
+            
+            # Check versioned solution templates
+            VERSIONED_TEMPLATES=$(echo "$APP_CHANGES" | jq -r --arg app "$app" '.[$app].solution_templates[]?' 2>/dev/null || true)
+            for version in $VERSIONED_TEMPLATES; do
+              echo "Checking solution template version: $app v$version"
+              
+              # Find the solution template file for this version
+              SOL_TEMPLATE_FILE=".pg/apps/$app/workload-orchestration/solution-templates/$version/${app}-sol-template.yaml"
+              if [[ ! -f "$SOL_TEMPLATE_FILE" ]]; then
+                # Try alternative naming pattern
+                SOL_TEMPLATE_FILE=".pg/apps/$app/workload-orchestration/solution-templates/$version/sol-template.yaml"
+              fi
+              
+              if [[ -f "$SOL_TEMPLATE_FILE" ]]; then
+                TEMPLATE_NAME=$(yq eval '.metadata.name' "$SOL_TEMPLATE_FILE" 2>/dev/null || echo "")
+                if [[ -n "$TEMPLATE_NAME" ]]; then
+                  # Check if version exists in Config Manager
+                  if az workload-orchestration solution-template version show -g "$AZURE_RESOURCE_GROUP" --solution-template-name "$TEMPLATE_NAME" -v "$version" >/dev/null 2>&1; then
+                    ERROR="Solution template version $version already exists for $TEMPLATE_NAME in Config Manager. Please create a new version for any changes."
+                    VALIDATION_ERRORS+=("$ERROR")
+                    HAS_ERRORS=true
+                    echo "❌ $ERROR"
+                  else
+                    echo "✅ Solution template version $version for $TEMPLATE_NAME is valid (new version)"
+                  fi
+                else
+                  echo "⚠️  Could not read template name from $SOL_TEMPLATE_FILE"
+                fi
+              else
+                echo "⚠️  Solution template file not found for $app version $version"
+              fi
+            done
+          done
+          
+          # Convert validation errors to JSON array
+          if [[ ${#VALIDATION_ERRORS[@]} -gt 0 ]]; then
+            ERRORS_JSON=$(printf '%s\n' "${VALIDATION_ERRORS[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          else
+            ERRORS_JSON="[]"
+          fi
+          
+          echo "validation_errors=$ERRORS_JSON" >> $GITHUB_OUTPUT
+          echo "has_errors=$HAS_ERRORS" >> $GITHUB_OUTPUT
+          
+          if [[ "$HAS_ERRORS" == "true" ]]; then
+            echo "⚠️  Validation found errors, but continuing with workflow to allow other updates to proceed"
+          else
+            echo "✅ All version validations passed"
+          fi
+
+  update-wo-artifacts:
+    needs: [detect-apps-resources-to-update, validate-versioned-changes]
+    if: always() && needs.detect-apps-resources-to-update.outputs.apps != '[]' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none')
+    runs-on: ubuntu-latest
+    outputs:
+      files_created: ${{ steps.check-created.outputs.files_created }}
+    strategy:
+      fail-fast: false
+      max-parallel: 4  # Limit to 4 concurrent jobs
+      matrix:
+        app_name: ${{ fromJson(needs.detect-apps-resources-to-update.outputs.apps) }}
+    
+    steps:
+      - name: Azure Login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Source composite actions
+        uses: ./.github/actions/wo-utilities/
+        with:
+          utilities: "yq"
+
+      - name: Read Azure config from wo-common.yaml
+        run: |
+          # Read default values from wo-common.yaml
+          DEFAULT_RG=$(yq eval '.common.rg' .pg/sites/common/wo-common.yaml)
+          DEFAULT_LOC=$(yq eval '.common.location' .pg/sites/common/wo-common.yaml)
+          
+          # Check if usesiterg override is provided
+          if [[ "${{ github.event.inputs.usesiterg }}" != "" ]]; then
+            # Use the override value
+            AZURE_RG="${{ github.event.inputs.usesiterg }}"
+            echo "Using override resource group: $AZURE_RG"
+          else
+            # Use the default from config
+            AZURE_RG="$DEFAULT_RG"
+            echo "Using default resource group from wo-common.yaml: $AZURE_RG"
+          fi
+          
+          # Location always comes from config (no override for location)
+          AZURE_LOC="$DEFAULT_LOC"
+          
+          echo "AZURE_RESOURCE_GROUP=$AZURE_RG" >> $GITHUB_ENV
+          echo "AZURE_LOCATION=$AZURE_LOC" >> $GITHUB_ENV
+          echo "Final Azure config - RG: $AZURE_RG, Location: $AZURE_LOC"
+
+      - name: Install Workload Orchestration Extension
+        uses: ./.github/actions/wo-install-wo-extension
+
+      - name: Check changed files
+        if: github.event_name == 'push' || github.event_name == 'workflow_run'
+        id: changed-files
+        uses: ./.github/actions/wo-changed-files
+        with:
+          files: .pg/**/*
+          
+      - name: Detect versioned files and determine actions
+        id: detect-actions
+        run: |
+          BASE_PATH=".pg/apps/${{ matrix.app_name }}/workload-orchestration"
+          CREATE_SCHEMA="false"
+          CREATE_TEMPLATE="false"
+          SCHEMA_FILES=()
+          TEMPLATE_FILES=()
+          
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # For manual runs, find ALL versioned files for the specified actions
+            case "${{ github.event.inputs.action }}" in
+              "create-schema"|"all")
+                CREATE_SCHEMA="true"
+                # Find all versioned schema files
+                if [[ -d "$BASE_PATH/schemas" ]]; then
+                  for version_dir in "$BASE_PATH/schemas"/*/ ; do
+                    if [[ -d "$version_dir" && "$(basename "$version_dir")" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                      if [[ -f "$version_dir/${{ matrix.app_name }}-schema.yaml" ]]; then
+                        SCHEMA_FILES+=("$version_dir/${{ matrix.app_name }}-schema.yaml")
+                      elif [[ -f "$version_dir/schema.yaml" ]]; then
+                        SCHEMA_FILES+=("$version_dir/schema.yaml")
+                      fi
+                    fi
+                  done
+                fi
+                ;;
+            esac
+            case "${{ github.event.inputs.action }}" in
+              "create-soln-template"|"all")
+                CREATE_TEMPLATE="true"
+                # Find all versioned solution template files
+                if [[ -d "$BASE_PATH/solution-templates" ]]; then
+                  for version_dir in "$BASE_PATH/solution-templates"/*/ ; do
+                    if [[ -d "$version_dir" && "$(basename "$version_dir")" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                      if [[ -f "$version_dir/${{ matrix.app_name }}-sol-template.yaml" ]]; then
+                        TEMPLATE_FILES+=("$version_dir/${{ matrix.app_name }}-sol-template.yaml")
+                      elif [[ -f "$version_dir/sol-template.yaml" ]]; then
+                        TEMPLATE_FILES+=("$version_dir/sol-template.yaml")
+                      fi
+                    fi
+                  done
+                fi
+                ;;
+            esac
+          else
+            # For push events, check changed files and determine actions based on versioned files only
+            APP_CHANGES='${{ needs.detect-apps-resources-to-update.outputs.app_changes }}'
+            
+            # Check if this app has changes
+            APP_DATA=$(echo "$APP_CHANGES" | jq --arg app "${{ matrix.app_name }}" '.[$app] // empty')
+            if [[ -n "$APP_DATA" ]]; then
+              # Check for versioned schema changes
+              SCHEMA_VERSIONS=$(echo "$APP_DATA" | jq -r '.schemas[]?' || true)
+              
+              if [[ -n "$SCHEMA_VERSIONS" ]]; then
+                CREATE_SCHEMA="true"
+                
+                # Add versioned schema files
+                for version in $SCHEMA_VERSIONS; do
+                  if [[ -f "$BASE_PATH/schemas/$version/${{ matrix.app_name }}-schema.yaml" ]]; then
+                    SCHEMA_FILES+=("$BASE_PATH/schemas/$version/${{ matrix.app_name }}-schema.yaml")
+                  elif [[ -f "$BASE_PATH/schemas/$version/schema.yaml" ]]; then
+                    SCHEMA_FILES+=("$BASE_PATH/schemas/$version/schema.yaml")
+                  fi
+                done
+              fi
+              
+              # Check for versioned solution template changes
+              TEMPLATE_VERSIONS=$(echo "$APP_DATA" | jq -r '.solution_templates[]?' || true)
+              
+              if [[ -n "$TEMPLATE_VERSIONS" ]]; then
+                CREATE_TEMPLATE="true"
+                
+                # Add versioned solution template files
+                for version in $TEMPLATE_VERSIONS; do
+                  if [[ -f "$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-sol-template.yaml" ]]; then
+                    TEMPLATE_FILES+=("$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-sol-template.yaml")
+                  elif [[ -f "$BASE_PATH/solution-templates/$version/sol-template.yaml" ]]; then
+                    TEMPLATE_FILES+=("$BASE_PATH/solution-templates/$version/sol-template.yaml")
+                  fi
+                done
+              fi
+            fi
+          fi
+          
+          # Convert arrays to JSON
+          SCHEMA_FILES_JSON=$(printf '%s\n' "${SCHEMA_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          TEMPLATE_FILES_JSON=$(printf '%s\n' "${TEMPLATE_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          
+          # Set outputs
+          echo "create_schema=$CREATE_SCHEMA" >> $GITHUB_OUTPUT
+          echo "create_template=$CREATE_TEMPLATE" >> $GITHUB_OUTPUT
+          echo "schema_files=$SCHEMA_FILES_JSON" >> $GITHUB_OUTPUT
+          echo "template_files=$TEMPLATE_FILES_JSON" >> $GITHUB_OUTPUT
+          
+          echo "Actions for ${{ matrix.app_name }}: schema=$CREATE_SCHEMA, template=$CREATE_TEMPLATE"
+          echo "Schema files: $SCHEMA_FILES_JSON"
+          echo "Template files: $TEMPLATE_FILES_JSON"
+
+      - name: Create App Schemas (Versioned Only)
+        if: steps.detect-actions.outputs.create_schema == 'true'
+        run: |
+          SCHEMA_FILES='${{ steps.detect-actions.outputs.schema_files }}'
+          
+          # Process each versioned schema file
+          echo "$SCHEMA_FILES" | jq -r '.[]' | while read -r schema_file; do
+            echo "Creating schema for versioned file: $schema_file"
+            
+            SCHEMA_NAME=$(yq eval '.metadata.name' "$schema_file")
+            SCHEMA_VERSION=$(yq eval '.metadata.version' "$schema_file")
+            
+            echo "Processing schema: $SCHEMA_NAME version $SCHEMA_VERSION"
+            
+            if ! az workload-orchestration schema version show -g "$AZURE_RESOURCE_GROUP" --schema-name "$SCHEMA_NAME" -v "$SCHEMA_VERSION" >/dev/null 2>&1; then
+              echo "Schema version not found. Creating new schema..."
+              az workload-orchestration schema create \
+                -g "$AZURE_RESOURCE_GROUP" \
+                -l "$AZURE_LOCATION" \
+                --schema-file "$schema_file"
+              echo "✅ Created schema: $SCHEMA_NAME version $SCHEMA_VERSION"
+            else
+              echo "✅ Schema version already exists. Skipping creation."
+            fi
+          done
+
+      - name: Create App Solution Templates (Versioned Only)
+        id: create-templates
+        if: steps.detect-actions.outputs.create_template == 'true'
+        run: |
+          TEMPLATE_FILES='${{ steps.detect-actions.outputs.template_files }}'
+          FILES_CREATED=false
+          
+          # Process each versioned template file
+          echo "$TEMPLATE_FILES" | jq -r '.[]' | while read -r template_file; do
+            echo "Creating solution template for versioned file: $template_file"
+            
+            # Find corresponding specs file and metadata file
+            TEMPLATE_DIR=$(dirname "$template_file")
+            
+            # Look for specs file in the same versioned directory
+            SPECS_FILE=""
+            if [[ -f "$TEMPLATE_DIR/${{ matrix.app_name }}-specs.json" ]]; then
+              SPECS_FILE="$TEMPLATE_DIR/${{ matrix.app_name }}-specs.json"
+            elif [[ -f "$TEMPLATE_DIR/specs.json" ]]; then
+              SPECS_FILE="$TEMPLATE_DIR/specs.json"
+            fi
+            
+            # Metadata file is always in the root
+            METADATA_FILE=".pg/apps/${{ matrix.app_name }}/workload-orchestration/metadata.yaml"
+            
+            if [[ -n "$SPECS_FILE" && -f "$SPECS_FILE" && -f "$METADATA_FILE" ]]; then
+              echo "Using specs file: $SPECS_FILE"
+              echo "Using metadata file: $METADATA_FILE"
+              
+              # Read template metadata
+              TEMPLATE_NAME=$(yq eval '.metadata.name' "$template_file")
+              TEMPLATE_VERSION=$(yq eval '.metadata.version' "$template_file")
+              SCHEMA_NAME=$(yq eval '.schema.name' "$template_file")
+              SCHEMA_VERSION=$(yq eval '.schema.version' "$template_file")
+              TEMPLATE_DESCRIPTION=$(yq eval '.description' "$METADATA_FILE")
+              TEMPLATE_CAPABILITIES="[$(yq eval '.capabilities[]' "$METADATA_FILE" | tr '\n' ',' | sed 's/,$//')]"
+              TEMPLATE_ENABLE_VALIDATION=$(yq eval '.enable-external-validation' "$METADATA_FILE")
+              
+              echo "Processing template: $TEMPLATE_NAME version $TEMPLATE_VERSION"
+              
+              # Check if schema version exists
+              if ! az workload-orchestration schema version show -g "$AZURE_RESOURCE_GROUP" --schema-name "$SCHEMA_NAME" -v "$SCHEMA_VERSION" >/dev/null 2>&1; then
+                echo "Error: Schema version $SCHEMA_VERSION does not exist for schema $SCHEMA_NAME"
+                echo "Please ensure the schema and version exist before creating the solution template."
+                continue
+              fi
+              
+              # Check if solution template version already exists
+              if ! az workload-orchestration solution-template version show -g "$AZURE_RESOURCE_GROUP" --solution-template-name "$TEMPLATE_NAME" -v "$TEMPLATE_VERSION" >/dev/null 2>&1; then
+                echo "Solution template version not found. Creating new version..."
+                
+                RESPONSE=$(az workload-orchestration solution-template create \
+                  -g "$AZURE_RESOURCE_GROUP" \
+                  -l "$AZURE_LOCATION" \
+                  --capabilities "$TEMPLATE_CAPABILITIES" \
+                  --configuration-template-file "$template_file" \
+                  --specification "$SPECS_FILE" \
+                  --description "$TEMPLATE_DESCRIPTION" \
+                  --enable-external-validation "$TEMPLATE_ENABLE_VALIDATION" \
+                  --output json)
+                
+                echo "✅ Created solution template: $TEMPLATE_NAME version $TEMPLATE_VERSION"
+                FILES_CREATED=true
+                
+                # Extract resource IDs and create metadata (similar to original action)
+                SOLUTION_TEMPLATE_ID=$(echo "$RESPONSE" | jq -r '.properties.solutionTemplateId // empty')
+                SOLUTION_TEMPLATE_VERSION_ID=$(echo "$RESPONSE" | jq -r '.properties.solutionTemplateVersionId // empty')
+                
+                # Create solution template metadata
+                FOLDER_PATH=".pg/apps/${{ matrix.app_name }}/solutions"
+                mkdir -p "$FOLDER_PATH"
+                YAML_FILE="$FOLDER_PATH/$TEMPLATE_NAME.yaml"
+                
+                if [[ -f "$YAML_FILE" ]]; then
+                  # Check if this version already exists
+                  EXISTING_VERSION=$(yq eval ".versions[] | select(.version == \"$TEMPLATE_VERSION\") | .version" "$YAML_FILE" 2>/dev/null || echo "")
+                  
+                  if [[ -z "$EXISTING_VERSION" ]]; then
+                    echo "Adding new version to existing YAML file..."
+                    yq eval ".versions += [{\"version\": \"$TEMPLATE_VERSION\", \"solutionTemplateVersionId\": \"$SOLUTION_TEMPLATE_VERSION_ID\", \"revisions\": []}]" -i "$YAML_FILE"
+                  fi
+                else
+                  echo "Creating new YAML file..."
+                  yq eval -n '.solutionTemplateName = "'"$TEMPLATE_NAME"'"' > "$YAML_FILE"
+                  yq eval '.solutionTemplateId = "'"$SOLUTION_TEMPLATE_ID"'"' -i "$YAML_FILE"
+                  yq eval '.versions = []' -i "$YAML_FILE"
+                  yq eval '.versions += [{"version": "'"$TEMPLATE_VERSION"'", "solutionTemplateVersionId": "'"$SOLUTION_TEMPLATE_VERSION_ID"'", "revisions": []}]' -i "$YAML_FILE"
+                fi
+              else
+                echo "✅ Solution template version already exists. Skipping creation."
+              fi
+            else
+              echo "❌ Missing required files for template: $template_file"
+              echo "  Specs file: $SPECS_FILE (exists: $(test -f "$SPECS_FILE" && echo yes || echo no))"
+              echo "  Metadata file: $METADATA_FILE (exists: $(test -f "$METADATA_FILE" && echo yes || echo no))"
+            fi
+          done
+          
+          echo "files_created=$FILES_CREATED" >> $GITHUB_OUTPUT
+
+      - name: Check if files were created
+        id: check-created
+        run: |
+          # Check if any files were created (either schema or template)
+          if [[ "${{ steps.create-templates.outputs.files_created }}" == "true" ]] || [[ "${{ steps.detect-actions.outputs.create_schema }}" == "true" ]]; then
+            echo "files_created=true" >> $GITHUB_OUTPUT
+          else
+            echo "files_created=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload generated files
+        if: steps.check-created.outputs.files_created == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-artifacts-${{ matrix.app_name }}
+          path: .pg/apps/${{ matrix.app_name }}/solutions/
+          retention-days: 1
+          if-no-files-found: warn
+
+  update_common_artifacts:
+    needs: update-context
+    if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.update_common != 'none' }}
+    runs-on: ubuntu-latest
+    outputs:
+      files_created: ${{ steps.check-created.outputs.files_created }}
+    steps:
+      - name: Azure Login with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - uses: actions/checkout@v4
+
+      - name: Source composite actions
+        uses: ./.github/actions/wo-utilities/
+        with:
+          utilities: "yq"
+
+      - name: Read Azure config from wo-common.yaml
+        run: |
+          # Read default values from wo-common.yaml
+          DEFAULT_RG=$(yq eval '.common.rg' .pg/sites/common/wo-common.yaml)
+          DEFAULT_LOC=$(yq eval '.common.location' .pg/sites/common/wo-common.yaml)
+          
+          # Check if usesiterg override is provided
+          if [[ "${{ github.event.inputs.usesiterg }}" != "" ]]; then
+            # Use the override value
+            AZURE_RG="${{ github.event.inputs.usesiterg }}"
+            echo "Using override resource group: $AZURE_RG"
+          else
+            # Use the default from config
+            AZURE_RG="$DEFAULT_RG"
+            echo "Using default resource group from wo-common.yaml: $AZURE_RG"
+          fi
+          
+          # Location always comes from config (no override for location)
+          AZURE_LOC="$DEFAULT_LOC"
+          
+          echo "AZURE_RESOURCE_GROUP=$AZURE_RG" >> $GITHUB_ENV
+          echo "AZURE_LOCATION=$AZURE_LOC" >> $GITHUB_ENV
+          echo "Final Azure config - RG: $AZURE_RG, Location: $AZURE_LOC"
+
+      - name: Install Workload Orchestration Extension
+        uses: ./.github/actions/wo-install-wo-extension
+
+      - name: Get files
+        id: get-files
+        run: |
+          # Verify schema file exists
+          SCHEMA_PATH=".pg/apps/common/common-schema.yaml"
+          if [[ -f "$SCHEMA_PATH" ]]; then
+            echo "schema_file=$SCHEMA_PATH" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Common schema file not found at $SCHEMA_PATH"
+          fi
+          
+          # Verify config template file exists
+          CONFIG_PATH=".pg/apps/common/common-config-template.yaml"
+          if [[ -f "$CONFIG_PATH" ]]; then
+            echo "config_file=$CONFIG_PATH" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Common config template file not found at $CONFIG_PATH"
+          fi
+        
+      - name: Check changed files
+        if: github.event_name == 'push' || github.event_name == 'workflow_run'
+        id: changed-files
+        uses: ./.github/actions/wo-changed-files
+        with:
+          files: .pg/apps/common/*
+
+      - name: Set update flags
+        id: update-flags
+        run: |
+          # Initialize flags
+          UPDATE_COMMON_SCHEMA="false"
+          UPDATE_COMMON_CONFIG="false"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            # For manual runs, check update_common input
+            case "${{ github.event.inputs.update_common }}" in
+              "schema-only"|"all")
+                UPDATE_COMMON_SCHEMA="true"
+                ;;
+            esac
+            case "${{ github.event.inputs.update_common }}" in
+              "config-only"|"all")
+                UPDATE_COMMON_CONFIG="true"
+                ;;
+            esac
+          else
+            # For push events, check changed files
+            if [[ $(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -c ".pg/apps/common/common-schema.yaml") -gt 0 ]]; then
+              UPDATE_COMMON_SCHEMA="true"
+            fi
+            if [[ $(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -c ".pg/apps/common/common-config-template.yaml") -gt 0 ]]; then
+              UPDATE_COMMON_CONFIG="true"
+            fi
+          fi
+
+          # Set outputs
+          echo "update_schema=$UPDATE_COMMON_SCHEMA" >> $GITHUB_OUTPUT
+          echo "update_config=$UPDATE_COMMON_CONFIG" >> $GITHUB_OUTPUT
+
+          # Echo final status using local variables
+          echo "Set flags: schema=$UPDATE_COMMON_SCHEMA, template=$UPDATE_COMMON_CONFIG"
+
+      - name: Create Common Schema
+        if: steps.update-flags.outputs.update_schema == 'true'
+        uses: ./.github/actions/wo-create-schema
+        with:
+          app-name: common
+          azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+          location: ${{ env.AZURE_LOCATION }}
+          schema-file: ${{ steps.get-files.outputs.schema_file }}
+
+      - name: Create Common Config Template
+        id: create-config
+        if: steps.update-flags.outputs.update_config == 'true'
+        uses: ./.github/actions/wo-create-config-template
+        with:
+          azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
+          resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+          config-template-file: ${{ steps.get-files.outputs.config_file }}
+          description: "Common configuration template for shared settings"
+          location: ${{ env.AZURE_LOCATION }}
+
+      - name: Check if files were created
+        id: check-created
+        run: |
+          # Check if any files were created (either schema or config)
+          if [[ "${{ steps.create-config.outputs.files_created }}" == "true" ]] || [[ "${{ steps.update-flags.outputs.update_schema }}" == "true" ]]; then
+            echo "files_created=true" >> $GITHUB_OUTPUT
+          else
+            echo "files_created=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload generated files
+        if: steps.check-created.outputs.files_created == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-artifacts-common
+          path: .pg/apps/common/solutions/
+          retention-days: 1
+          if-no-files-found: warn
+
+  commit-generated-files:
+    needs: [update-wo-artifacts, update_common_artifacts]
+    if: always() && (needs.update-wo-artifacts.outputs.files_created == 'true' || needs.update_common_artifacts.outputs.files_created == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: generated-artifacts-*
+          path: downloaded-artifacts
+
+      - name: Process and copy artifacts to correct locations
+        run: |
+          echo "Processing downloaded artifacts..."
+          
+          # Create solutions directories if they don't exist
+          mkdir -p .pg/apps/common/solutions
+          
+          # Process each artifact
+          for artifact_dir in downloaded-artifacts/generated-artifacts-*; do
+            if [ -d "$artifact_dir" ]; then
+              artifact_name=$(basename "$artifact_dir")
+              echo "Processing $artifact_name"
+              
+              if [[ "$artifact_name" == "generated-artifacts-common" ]]; then
+                # Copy common solutions
+                if [ -d "$artifact_dir" ]; then
+                  cp -r "$artifact_dir"/* .pg/apps/common/solutions/ 2>/dev/null || echo "No files to copy for common"
+                fi
+              else
+                # Extract app name from artifact name
+                app_name=${artifact_name#generated-artifacts-}
+                echo "Processing app: $app_name"
+                
+                # Create app solutions directory
+                mkdir -p ".pg/apps/$app_name/solutions"
+                
+                # Copy app solutions
+                if [ -d "$artifact_dir" ]; then
+                  cp -r "$artifact_dir"/* ".pg/apps/$app_name/solutions/" 2>/dev/null || echo "No files to copy for $app_name"
+                fi
+              fi
+            fi
+          done
+          
+          # List what was copied for debugging
+          echo "Files copied:"
+          find .pg -name "*.json" -o -name "*.yaml" | head -20
+
+      - name: Commit all generated files
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Generated workload orchestration artifacts (v2 - versioned only)"
+          file_pattern: ".pg/**"
+
+  report-validation-errors:
+    needs: [validate-versioned-changes, update-wo-artifacts, commit-generated-files]
+    if: always() && needs.validate-versioned-changes.outputs.has_errors == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report validation errors
+        run: |
+          echo "🚨 Version Validation Errors Found:"
+          echo ""
+          ERRORS='${{ needs.validate-versioned-changes.outputs.validation_errors }}'
+          echo "$ERRORS" | jq -r '.[]' | while read -r error; do
+            echo "❌ $error"
+          done
+          echo ""
+          echo "The workflow completed other updates successfully, but the above version conflicts must be resolved."
+          echo "Please create new versions for any changes to existing versioned files."
+          exit 1
