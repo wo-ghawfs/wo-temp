@@ -207,7 +207,7 @@ jobs:
           echo "✅ Final app list: $APPS"
 
   validate-versioned-changes:
-    needs: [detect-apps-resources-to-update, update-context]
+    needs: [detect-apps-resources-to-update]
     if: ${{ needs.detect-apps-resources-to-update.outputs.app_changes != '{}' && github.event_name != 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     outputs:
@@ -634,7 +634,7 @@ jobs:
           if-no-files-found: warn
 
   update_common_artifacts:
-    needs: update-context
+    # needs: update-context
     if: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.update_common != 'none' }}
     runs-on: ubuntu-latest
     outputs:
