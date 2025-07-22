@@ -1,5 +1,5 @@
-name: Create Workload Orchestration SchemaAdd commentMore actions
-description: Creates an Azure Workload Orchestration Schema using provided parameters
+name: Create Workload Orchestration Schema
+description: Creates Azure Workload Orchestration Schema(s) using provided parameters - supports both single file and batch processing
 
 inputs:
   app-name:
@@ -7,7 +7,7 @@ inputs:
     required: true
   azure-credentials:
     description: 'Azure credentials for authentication'
-    required: true
+    required: false
   resource-group:
     description: 'Azure Resource Group name'
     required: true
@@ -15,31 +15,223 @@ inputs:
     description: 'Azure region location'
     required: true
   schema-file:
-    description: 'Path to the schema file relative to repository root'
-    required: true
+    description: 'Path to single schema file relative to repository root (for backward compatibility)'
+    required: false
+  schema-files:
+    description: 'JSON array of schema file paths for batch processing'
+    required: false
+
+outputs:
+  schemas-created:
+    description: 'Number of schemas successfully created'
+    value: ${{ steps.process-schemas.outputs.schemas-created }}
+  schemas-skipped:
+    description: 'Number of schemas skipped (already existed)'
+    value: ${{ steps.process-schemas.outputs.schemas-skipped }}
+  schemas-failed:
+    description: 'Number of schemas that failed to create'
+    value: ${{ steps.process-schemas.outputs.schemas-failed }}
+  total-processed:
+    description: 'Total number of schema files processed'
+    value: ${{ steps.process-schemas.outputs.total-processed }}
+  failed-schemas-details:
+    description: 'JSON array with details about failed schemas (file, schema-name, version, error)'
+    value: ${{ steps.process-schemas.outputs.failed-schemas-details }}
+  skipped-schemas-details:
+    description: 'JSON array with details about skipped schemas (file, schema-name, version)'
+    value: ${{ steps.process-schemas.outputs.skipped-schemas-details }}
 
 runs:
   using: composite
   steps:
-        
-    - name: Read Schema Details
+    - name: Validate Inputs
       shell: bash
       run: |
-        SCHEMA_FILE="${{ inputs.schema-file }}"
-        echo "SCHEMA_NAME=$(yq eval '.metadata.name' $SCHEMA_FILE)" >> $GITHUB_ENV
-        echo "SCHEMA_VERSION=$(yq eval '.metadata.version' $SCHEMA_FILE)" >> $GITHUB_ENV
-        
-    - name: Create Schema
-      shell: bash
-      run: |
-        SCHEMA_FILE="${{ inputs.schema-file }}"
-        
-        if ! az workload-orchestration schema version show -g ${{ inputs.resource-group }} --schema-name ${{ env.SCHEMA_NAME }} -v ${{ env.SCHEMA_VERSION }}; then
-          echo "Schema version not found. Creating new schema..."
-          az workload-orchestration schema create \
-            -g ${{ inputs.resource-group }} \
-            -l ${{ inputs.location }} \
-            --schema-file "$SCHEMA_FILE"
-        else
-          echo "Schema version already exists. Skipping creation."
+        if [[ -z "${{ inputs.schema-file }}" && -z "${{ inputs.schema-files }}" ]]; then
+          echo "❌ Error: Either 'schema-file' or 'schema-files' input must be provided"
+          exit 1
         fi
+        
+        if [[ -n "${{ inputs.schema-file }}" && -n "${{ inputs.schema-files }}" ]]; then
+          echo "❌ Error: Cannot provide both 'schema-file' and 'schema-files' inputs simultaneously"
+          exit 1
+        fi
+
+    - name: Process Schema(s)
+      id: process-schemas
+      shell: bash
+      run: |
+        SCHEMAS_CREATED=0
+        SCHEMAS_SKIPPED=0
+        SCHEMAS_FAILED=0
+        TOTAL_PROCESSED=0
+        FAILED_SCHEMAS_DETAILS="[]"
+        SKIPPED_SCHEMAS_DETAILS="[]"
+        
+        # Determine processing mode
+        if [[ -n "${{ inputs.schema-file }}" ]]; then
+          echo "🔧 Single file mode: Processing ${{ inputs.schema-file }}"
+          SCHEMA_FILES='["${{ inputs.schema-file }}"]'
+        else
+          echo "🔧 Batch mode: Processing multiple schema files"
+          SCHEMA_FILES='${{ inputs.schema-files }}'
+        fi
+        
+        echo "Schema files to process: $SCHEMA_FILES"
+        
+        # Process each schema file
+        echo "$SCHEMA_FILES" | jq -r '.[]' | while read -r schema_file; do
+          echo ""
+          echo "📄 Processing schema file: $schema_file"
+          
+          # Initialize failure tracking for this file
+          FAILURE_REASON=""
+          FAILURE_DETAILS=""
+          SCHEMA_NAME="unknown"
+          SCHEMA_VERSION="unknown"
+          
+          # Validate file exists
+          if [[ ! -f "$schema_file" ]]; then
+            echo "❌ Schema file not found: $schema_file"
+            FAILURE_REASON="File not found"
+            FAILURE_DETAILS="Schema file does not exist at specified path"
+            SCHEMAS_FAILED=$((SCHEMAS_FAILED + 1))
+          else
+            # Read schema metadata
+            SCHEMA_NAME=$(yq eval '.metadata.name' "$schema_file" 2>/dev/null || echo "")
+            SCHEMA_VERSION=$(yq eval '.metadata.version' "$schema_file" 2>/dev/null || echo "")
+            
+            if [[ -z "$SCHEMA_NAME" || -z "$SCHEMA_VERSION" ]]; then
+              echo "❌ Could not read schema name or version from $schema_file"
+              FAILURE_REASON="Metadata parse error"
+              FAILURE_DETAILS="Could not read schema name or version from file - check YAML format"
+              SCHEMA_NAME="unknown"
+              SCHEMA_VERSION="unknown"
+              SCHEMAS_FAILED=$((SCHEMAS_FAILED + 1))
+            else
+              echo "   Schema: $SCHEMA_NAME"
+              echo "   Version: $SCHEMA_VERSION"
+              
+              # Check if schema version already exists
+              if ! az workload-orchestration schema version show \
+                    -g "${{ inputs.resource-group }}" \
+                    --schema-name "$SCHEMA_NAME" \
+                    -v "$SCHEMA_VERSION" >/dev/null 2>&1; then
+                
+                echo "   Status: Schema version not found. Creating new schema..."
+                
+                # Capture Azure CLI error output
+                if ! AZ_ERROR=$(az workload-orchestration schema create \
+                     -g "${{ inputs.resource-group }}" \
+                     -l "${{ inputs.location }}" \
+                     --schema-file "$schema_file" 2>&1); then
+                  echo "   ❌ Failed to create schema: $SCHEMA_NAME version $SCHEMA_VERSION"
+                  FAILURE_REASON="Azure CLI creation failed"
+                  FAILURE_DETAILS="$AZ_ERROR"
+                  SCHEMAS_FAILED=$((SCHEMAS_FAILED + 1))
+                else
+                  echo "   ✅ Successfully created schema: $SCHEMA_NAME version $SCHEMA_VERSION"
+                  SCHEMAS_CREATED=$((SCHEMAS_CREATED + 1))
+                fi
+              else
+                echo "   ⏭️  Schema version already exists. Skipping creation."
+                SCHEMAS_SKIPPED=$((SCHEMAS_SKIPPED + 1))
+                
+                # Add to skipped schemas details
+                ESCAPED_FILE=$(echo "$schema_file" | sed 's/"/\\"/g')
+                ESCAPED_SCHEMA_NAME=$(echo "$SCHEMA_NAME" | sed 's/"/\\"/g')
+                ESCAPED_SCHEMA_VERSION=$(echo "$SCHEMA_VERSION" | sed 's/"/\\"/g')
+                
+                SKIPPED_ENTRY=$(jq -n \
+                  --arg file "$ESCAPED_FILE" \
+                  --arg name "$ESCAPED_SCHEMA_NAME" \
+                  --arg version "$ESCAPED_SCHEMA_VERSION" \
+                  '{file: $file, "schema-name": $name, version: $version}')
+                
+                SKIPPED_SCHEMAS_DETAILS=$(echo "$SKIPPED_SCHEMAS_DETAILS" | jq --argjson entry "$SKIPPED_ENTRY" '. + [$entry]')
+              fi
+            fi
+          fi
+          
+          # If there was a failure, add to failed schemas details
+          if [[ -n "$FAILURE_REASON" ]]; then
+            # Escape JSON strings properly
+            ESCAPED_FILE=$(echo "$schema_file" | sed 's/"/\\"/g')
+            ESCAPED_SCHEMA_NAME=$(echo "$SCHEMA_NAME" | sed 's/"/\\"/g')
+            ESCAPED_SCHEMA_VERSION=$(echo "$SCHEMA_VERSION" | sed 's/"/\\"/g')
+            ESCAPED_REASON=$(echo "$FAILURE_REASON" | sed 's/"/\\"/g')
+            ESCAPED_DETAILS=$(echo "$FAILURE_DETAILS" | sed 's/"/\\"/g' | tr '\n' ' ')
+            
+            # Add failure details to JSON array
+            FAILED_ENTRY=$(jq -n \
+              --arg file "$ESCAPED_FILE" \
+              --arg name "$ESCAPED_SCHEMA_NAME" \
+              --arg version "$ESCAPED_SCHEMA_VERSION" \
+              --arg error "$ESCAPED_REASON" \
+              --arg details "$ESCAPED_DETAILS" \
+              '{file: $file, "schema-name": $name, version: $version, error: $error, "error-details": $details}')
+            
+            FAILED_SCHEMAS_DETAILS=$(echo "$FAILED_SCHEMAS_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
+          fi
+          
+          TOTAL_PROCESSED=$((TOTAL_PROCESSED + 1))
+        done
+        
+        # Write counters and data to temp files to avoid subshell issues
+        echo "$SCHEMAS_CREATED" > /tmp/schemas_created.txt
+        echo "$SCHEMAS_SKIPPED" > /tmp/schemas_skipped.txt
+        echo "$SCHEMAS_FAILED" > /tmp/schemas_failed.txt
+        echo "$TOTAL_PROCESSED" > /tmp/total_processed.txt
+        echo "$FAILED_SCHEMAS_DETAILS" > /tmp/failed_schemas_details.json
+        echo "$SKIPPED_SCHEMAS_DETAILS" > /tmp/skipped_schemas_details.json
+
+    - name: Set Outputs
+      shell: bash
+      run: |
+        # Read counters from temp files
+        SCHEMAS_CREATED=$(cat /tmp/schemas_created.txt 2>/dev/null || echo "0")
+        SCHEMAS_SKIPPED=$(cat /tmp/schemas_skipped.txt 2>/dev/null || echo "0")
+        SCHEMAS_FAILED=$(cat /tmp/schemas_failed.txt 2>/dev/null || echo "0")
+        TOTAL_PROCESSED=$(cat /tmp/total_processed.txt 2>/dev/null || echo "0")
+        FAILED_SCHEMAS_DETAILS=$(cat /tmp/failed_schemas_details.json 2>/dev/null || echo "[]")
+        SKIPPED_SCHEMAS_DETAILS=$(cat /tmp/skipped_schemas_details.json 2>/dev/null || echo "[]")
+        
+        # Compact JSON for output
+        FAILED_SCHEMAS_COMPACT=$(echo "$FAILED_SCHEMAS_DETAILS" | jq -c .)
+        SKIPPED_SCHEMAS_COMPACT=$(echo "$SKIPPED_SCHEMAS_DETAILS" | jq -c .)
+        
+        # Set all outputs
+        echo "schemas-created=$SCHEMAS_CREATED" >> $GITHUB_OUTPUT
+        echo "schemas-skipped=$SCHEMAS_SKIPPED" >> $GITHUB_OUTPUT
+        echo "schemas-failed=$SCHEMAS_FAILED" >> $GITHUB_OUTPUT
+        echo "total-processed=$TOTAL_PROCESSED" >> $GITHUB_OUTPUT
+        echo "failed-schemas-details=$FAILED_SCHEMAS_COMPACT" >> $GITHUB_OUTPUT
+        echo "skipped-schemas-details=$SKIPPED_SCHEMAS_COMPACT" >> $GITHUB_OUTPUT
+        
+        echo ""
+        echo "📊 Summary:"
+        echo "   Total processed: $TOTAL_PROCESSED"
+        echo "   Schemas created: $SCHEMAS_CREATED"
+        echo "   Schemas skipped: $SCHEMAS_SKIPPED"
+        echo "   Schemas failed: $SCHEMAS_FAILED"
+        
+        # Show detailed skipped information if there are skipped schemas
+        if [[ "$SCHEMAS_SKIPPED" -gt 0 ]]; then
+          echo ""
+          echo "⏭️ Skipped Schemas Details:"
+          echo "$SKIPPED_SCHEMAS_DETAILS" | jq -r '.[] | "   - \(.["schema-name"]) v\(.version) (\(.file))"'
+        fi
+        
+        # Show detailed failure information if there are failures
+        if [[ "$SCHEMAS_FAILED" -gt 0 ]]; then
+          echo ""
+          echo "❌ Failed Schemas Details:"
+          echo "$FAILED_SCHEMAS_DETAILS" | jq -r '.[] | "   - \(.["schema-name"]) v\(.version): \(.error) (\(.file))"'
+          
+          echo ""
+          echo "🔍 Detailed Error Information:"
+          echo "$FAILED_SCHEMAS_DETAILS" | jq -r '.[] | "   File: \(.file)\n   Schema: \(.["schema-name"]) v\(.version)\n   Error: \(.error)\n   Details: \(.["error-details"])\n"'
+        fi
+        
+        # Clean up temp files
+        rm -f /tmp/schemas_created.txt /tmp/schemas_skipped.txt /tmp/schemas_failed.txt /tmp/total_processed.txt /tmp/failed_schemas_details.json /tmp/skipped_schemas_details.json

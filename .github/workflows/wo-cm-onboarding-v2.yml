@@ -48,33 +48,33 @@ permissions:
   contents: write # for actions/checkout
 
 jobs:
-  update-context:
-    runs-on: ubuntu-latest
+  # update-context:
+  #   runs-on: ubuntu-latest
     
-    steps:
-      - name: Azure Login with OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-          enable-AzPSSession: true
+  #   steps:
+  #     - name: Azure Login with OIDC
+  #       uses: azure/login@v2
+  #       with:
+  #         client-id: ${{ secrets.AZURE_CLIENT_ID }}
+  #         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+  #         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  #         enable-AzPSSession: true
 
-      - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v4
 
-      - name: Source composite actions
-        uses: ./.github/actions/wo-utilities/
-        with:
-          utilities: "yq"
+  #     - name: Source composite actions
+  #       uses: ./.github/actions/wo-utilities/
+  #       with:
+  #         utilities: "yq"
 
-      - name: Install Workload Orchestration Extension
-        uses: ./.github/actions/wo-install-wo-extension
+  #     - name: Install Workload Orchestration Extension
+  #       uses: ./.github/actions/wo-install-wo-extension
 
-      - name: Update Context
-        uses: ./.github/actions/wo-update-context
+  #     - name: Update Context
+  #       uses: ./.github/actions/wo-update-context
 
   detect-apps-resources-to-update:
-    needs: update-context
+    # needs: update-context
     runs-on: ubuntu-latest
     outputs:
       apps: ${{ github.event_name == 'workflow_dispatch' && steps.app-list-dispatch.outputs.apps || steps.app-list.outputs.apps }}
@@ -157,7 +157,7 @@ jobs:
                 APP_CHANGES=$(echo "$APP_CHANGES" | jq --arg app "$app_name" --arg version "$version" '.[$app].solution_templates |= if . | index($version) then . else . + [$version] end')
               fi
             fi
-          done <<< "$CHANGED_FILES"
+          done <<< "$(echo "$CHANGED_FILES" | tr ' ' '\n')"
           
           # Write to temporary file and read back (to handle while loop subshell issue)
           echo "$APP_CHANGES" > /tmp/app_changes.json
@@ -507,29 +507,12 @@ jobs:
 
       - name: Create App Schemas (Versioned Only)
         if: steps.detect-actions.outputs.create_schema == 'true'
-        run: |
-          SCHEMA_FILES='${{ steps.detect-actions.outputs.schema_files }}'
-          
-          # Process each versioned schema file
-          echo "$SCHEMA_FILES" | jq -r '.[]' | while read -r schema_file; do
-            echo "Creating schema for versioned file: $schema_file"
-            
-            SCHEMA_NAME=$(yq eval '.metadata.name' "$schema_file")
-            SCHEMA_VERSION=$(yq eval '.metadata.version' "$schema_file")
-            
-            echo "Processing schema: $SCHEMA_NAME version $SCHEMA_VERSION"
-            
-            if ! az workload-orchestration schema version show -g "$AZURE_RESOURCE_GROUP" --schema-name "$SCHEMA_NAME" -v "$SCHEMA_VERSION" >/dev/null 2>&1; then
-              echo "Schema version not found. Creating new schema..."
-              az workload-orchestration schema create \
-                -g "$AZURE_RESOURCE_GROUP" \
-                -l "$AZURE_LOCATION" \
-                --schema-file "$schema_file"
-              echo "✅ Created schema: $SCHEMA_NAME version $SCHEMA_VERSION"
-            else
-              echo "✅ Schema version already exists. Skipping creation."
-            fi
-          done
+        uses: ./.github/actions/wo-create-schema
+        with:
+          app-name: ${{ matrix.app_name }}
+          resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
+          location: ${{ env.AZURE_LOCATION }}
+          schema-files: ${{ steps.detect-actions.outputs.schema_files }}
 
       - name: Create App Solution Templates (Versioned Only)
         id: create-templates
