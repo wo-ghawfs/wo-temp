@@ -120,8 +120,9 @@ jobs:
           
           # Process each changed file - ONLY process versioned files
           while IFS= read -r file; do
-            # Only process files in versioned subdirectories
-            if [[ "$file" =~ ^\.pg/apps/([^/]+)/workload-orchestration/(schemas|solution-templates)/([0-9]+\.[0-9]+\.[0-9]+)/ ]]; then
+            # Only process files in versioned subdirectories (schemas: any file, solution-templates: .yaml or .json files)
+            if [[ "$file" =~ ^\.pg/apps/([^/]+)/workload-orchestration/(schemas)/([0-9]+\.[0-9]+\.[0-9]+)/ ]] || \
+               [[ "$file" =~ ^\.pg/apps/([^/]+)/workload-orchestration/(solution-templates)/([0-9]+\.[0-9]+\.[0-9]+)/.*\.(yaml|json)$ ]]; then
               app_name="${BASH_REMATCH[1]}"
               folder_type="${BASH_REMATCH[2]}"
               version="${BASH_REMATCH[3]}"
@@ -151,7 +152,10 @@ jobs:
           echo "$APP_CHANGES" > /tmp/app_changes.json
           APP_CHANGES_FINAL=$(cat /tmp/app_changes.json)
           
-          echo "app_changes=$APP_CHANGES_FINAL" >> $GITHUB_OUTPUT
+          # Compact the JSON to prevent GitHub Actions output formatting issues
+          APP_CHANGES_COMPACT=$(echo "$APP_CHANGES_FINAL" | jq -c .)
+          
+          echo "app_changes=$APP_CHANGES_COMPACT" >> $GITHUB_OUTPUT
           echo "Detected versioned app changes:"
           echo "$APP_CHANGES_FINAL" | jq .
 
