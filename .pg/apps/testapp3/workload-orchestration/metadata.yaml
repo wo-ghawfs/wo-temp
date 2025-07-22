@@ -1,0 +1,5 @@
+capabilities:
+  - azure-shampoo
+  - azure-soap
+description: 'Dummy app 3'
+enable-external-validation: 'true'
