@@ -739,173 +739,133 @@ jobs:
 
       - name: Process and report consolidated validation results
         run: |
-          # Schema counters
-          SCHEMA_SKIPPED=0
-          SCHEMA_FAILED=0
+          # Initialize counters and arrays
+          declare -A TOTALS=([schema_skip]=0 [schema_fail]=0 [template_skip]=0 [template_fail]=0)
           SCHEMA_SKIPPED_DETAILS="[]"
           SCHEMA_FAILED_DETAILS="[]"
-          
-          # Template counters  
-          TEMPLATE_SKIPPED=0
-          TEMPLATE_FAILED=0
           TEMPLATE_SKIPPED_DETAILS="[]"
           TEMPLATE_FAILED_DETAILS="[]"
           
-          echo "Processing validation results..."
+          function process_results() {
+            local result_type=$1
+            local file_pattern=$2
+            local skip_key=$3
+            local fail_key=$4
+            
+            # Exit if directory doesn't exist
+            [[ ! -d "validation-results/${result_type}-results" ]] && return 0
+            
+            # Find and process result files
+            while IFS= read -r result_file; do
+              [[ ! -f "$result_file" ]] && continue
+              
+              echo "Processing ${result_type} results: $result_file"
+              
+              # Extract counts with defaults
+              local skip_count=$(jq -r "try .${skip_key} // \"0\"" "$result_file")
+              local fail_count=$(jq -r "try .${fail_key} // \"0\"" "$result_file")
+              
+              # Update totals
+              ((TOTALS[${result_type}_skip]+=${skip_count:-0}))
+              ((TOTALS[${result_type}_fail]+=${fail_count:-0}))
+              
+              # Merge details arrays if they exist
+              if jq -e ".skipped_${result_type}_details" "$result_file" >/dev/null; then
+                if [[ "$result_type" == "schema" ]]; then
+                  SCHEMA_SKIPPED_DETAILS=$(echo "$SCHEMA_SKIPPED_DETAILS" | jq --argjson new "$(jq ".skipped_${result_type}_details" "$result_file")" '. + $new')
+                else
+                  TEMPLATE_SKIPPED_DETAILS=$(echo "$TEMPLATE_SKIPPED_DETAILS" | jq --argjson new "$(jq ".skipped_${result_type}_details" "$result_file")" '. + $new')
+                fi
+              fi
+              
+              if jq -e ".failed_${result_type}_details" "$result_file" >/dev/null; then
+                if [[ "$result_type" == "schema" ]]; then
+                  SCHEMA_FAILED_DETAILS=$(echo "$SCHEMA_FAILED_DETAILS" | jq --argjson new "$(jq ".failed_${result_type}_details" "$result_file")" '. + $new')
+                else
+                  TEMPLATE_FAILED_DETAILS=$(echo "$TEMPLATE_FAILED_DETAILS" | jq --argjson new "$(jq ".failed_${result_type}_details" "$result_file")" '. + $new')
+                fi
+              fi
+            done < <(find "validation-results/${result_type}-results" -name "*-results.json" -type f 2>/dev/null)
+          }
           
-          # Process schema results
-          if [[ -d "validation-results" ]]; then
-            # Check if any result files exist
-            if find validation-results -name "*-results.json" -print -quit 2>/dev/null | grep -q .; then
-            
-            # Process schema result files
-            for result_file in validation-results/schema-results/*-results.json 2>/dev/null; do
-              if [[ -f "$result_file" ]]; then
-                echo "Processing schema results: $result_file"
-                
-                SKIPPED=$(jq -r '.schemas_skipped // "0"' "$result_file")
-                FAILED=$(jq -r '.schemas_failed // "0"' "$result_file")
-                SKIPPED_DETAILS=$(jq -c '.skipped_schemas_details // []' "$result_file")
-                FAILED_DETAILS=$(jq -c '.failed_schemas_details // []' "$result_file")
-                
-                echo "  Schema - Skipped: $SKIPPED, Failed: $FAILED"
-                
-                # Add to schema totals
-                SCHEMA_SKIPPED=$((SCHEMA_SKIPPED + SKIPPED))
-                SCHEMA_FAILED=$((SCHEMA_FAILED + FAILED))
-                
-                # Merge schema details
-                if [[ "$SKIPPED_DETAILS" != "[]" ]]; then
-                  SCHEMA_SKIPPED_DETAILS=$(echo "$SCHEMA_SKIPPED_DETAILS" | jq --argjson new "$SKIPPED_DETAILS" '. + $new')
-                fi
-                
-                if [[ "$FAILED_DETAILS" != "[]" ]]; then
-                  SCHEMA_FAILED_DETAILS=$(echo "$SCHEMA_FAILED_DETAILS" | jq --argjson new "$FAILED_DETAILS" '. + $new')
-                fi
-              fi
-            done
-            
-            # Process template result files
-            for result_file in validation-results/template-results/*-results.json 2>/dev/null; do
-              if [[ -f "$result_file" ]]; then
-                echo "Processing template results: $result_file"
-                
-                SKIPPED=$(jq -r '.templates_skipped // "0"' "$result_file")
-                FAILED=$(jq -r '.templates_failed // "0"' "$result_file")
-                SKIPPED_DETAILS=$(jq -c '.skipped_templates_details // []' "$result_file")
-                FAILED_DETAILS=$(jq -c '.failed_templates_details // []' "$result_file")
-                
-                echo "  Template - Skipped: $SKIPPED, Failed: $FAILED"
-                
-                # Add to template totals
-                TEMPLATE_SKIPPED=$((TEMPLATE_SKIPPED + SKIPPED))
-                TEMPLATE_FAILED=$((TEMPLATE_FAILED + FAILED))
-                
-                # Merge template details
-                if [[ "$SKIPPED_DETAILS" != "[]" ]]; then
-                  TEMPLATE_SKIPPED_DETAILS=$(echo "$TEMPLATE_SKIPPED_DETAILS" | jq --argjson new "$SKIPPED_DETAILS" '. + $new')
-                fi
-                
-                if [[ "$FAILED_DETAILS" != "[]" ]]; then
-                  TEMPLATE_FAILED_DETAILS=$(echo "$TEMPLATE_FAILED_DETAILS" | jq --argjson new "$FAILED_DETAILS" '. + $new')
-                fi
-              fi
-            done
-            else
-              echo "No result files found in validation-results directory"
-              exit 0
-            fi
-          else
-            echo "No validation results directory found - no validation was performed"
+          # Check if any validation was performed
+          if [[ ! -d "validation-results" ]]; then
+            echo "No validation results found - no validation was performed"
             exit 0
           fi
           
-          # Calculate totals
-          TOTAL_SKIPPED=$((SCHEMA_SKIPPED + TEMPLATE_SKIPPED))
-          TOTAL_FAILED=$((SCHEMA_FAILED + TEMPLATE_FAILED))
+          # Process schema and template results
+          process_results "schema" "*-results.json" "schemas_skipped" "schemas_failed"
+          process_results "template" "*-results.json" "templates_skipped" "templates_failed"
+          
+          # Calculate final totals
+          TOTAL_SKIPPED=$((TOTALS[schema_skip] + TOTALS[template_skip]))
+          TOTAL_FAILED=$((TOTALS[schema_fail] + TOTALS[template_fail]))
           TOTAL_ISSUES=$((TOTAL_SKIPPED + TOTAL_FAILED))
           
-          echo ""
-          echo "📊 Consolidated Validation Results:"
-          echo "   📋 SCHEMAS:"
-          echo "      Skipped: $SCHEMA_SKIPPED"
-          echo "      Failed: $SCHEMA_FAILED"
-          echo "   📋 SOLUTION TEMPLATES:"
-          echo "      Skipped: $TEMPLATE_SKIPPED"
-          echo "      Failed: $TEMPLATE_FAILED"
-          echo "   📊 TOTALS:"
-          echo "      Total skipped: $TOTAL_SKIPPED"
-          echo "      Total failed: $TOTAL_FAILED"
-          echo "      Total issues: $TOTAL_ISSUES"
+          # Print summary header
+          echo "📊 Validation Results Summary:"
+          echo "=============================="
           
-          # Only report and fail if there are actually issues
-          if [[ $TOTAL_ISSUES -gt 0 ]]; then
-            echo ""
-            echo "🚨 Validation Issues Found:"
-            echo ""
+          # Report schema results if any exist
+          if ((TOTALS[schema_skip] > 0)) || ((TOTALS[schema_fail] > 0)); then
+            echo -e "\n📋 SCHEMA VALIDATION:"
+            echo "-------------------"
             
-            # Report schema issues
-            if [[ $SCHEMA_SKIPPED -gt 0 || $SCHEMA_FAILED -gt 0 ]]; then
-              echo "📋 SCHEMA VALIDATION RESULTS:"
-              
-              if [[ "$SCHEMA_SKIPPED" -gt 0 ]]; then
-                echo "⏭️  Skipped Schemas (Version Conflicts): $SCHEMA_SKIPPED"
-                echo "The following schema versions were skipped because they already exist:"
-                echo "$SCHEMA_SKIPPED_DETAILS" | jq -r '.[] | "   - \(.["schema-name"]) v\(.version) (\(.file))"'
-                echo ""
-              fi
-              
-              if [[ "$SCHEMA_FAILED" -gt 0 ]]; then
-                echo "❌ Failed Schema Creations: $SCHEMA_FAILED"
-                echo "The following schema creations failed:"
-                echo "$SCHEMA_FAILED_DETAILS" | jq -r '.[] | "   - \(.["schema-name"]) v\(.version): \(.error) (\(.file))"'
-                echo ""
-                echo "🔍 Schema Error Details:"
-                echo "$SCHEMA_FAILED_DETAILS" | jq -r '.[] | "   File: \(.file)\n   Schema: \(.["schema-name"]) v\(.version)\n   Error: \(.error)\n   Details: \(.["error-details"])\n"'
-              fi
+            if ((TOTALS[schema_skip] > 0)); then
+              echo -e "\n⚠️  Skipped Schemas: ${TOTALS[schema_skip]}"
+              echo "$SCHEMA_SKIPPED_DETAILS" | jq -r '.[] | "  • \(.["schema-name"]) v\(.version) (\(.file))"'
             fi
             
-            # Report template issues
-            if [[ $TEMPLATE_SKIPPED -gt 0 || $TEMPLATE_FAILED -gt 0 ]]; then
-              echo "📋 SOLUTION TEMPLATE VALIDATION RESULTS:"
-              
-              if [[ "$TEMPLATE_SKIPPED" -gt 0 ]]; then
-                echo "⏭️  Skipped Templates (Version Conflicts): $TEMPLATE_SKIPPED"
-                echo "The following solution template versions were skipped because they already exist:"
-                echo "$TEMPLATE_SKIPPED_DETAILS" | jq -r '.[] | "   - \(.["template-name"]) v\(.version) (\(.file))"'
-                echo ""
-              fi
-              
-              if [[ "$TEMPLATE_FAILED" -gt 0 ]]; then
-                echo "❌ Failed Template Creations: $TEMPLATE_FAILED"
-                echo "The following solution template creations failed:"
-                echo "$TEMPLATE_FAILED_DETAILS" | jq -r '.[] | "   - \(.["template-name"]) v\(.version): \(.error) (\(.file))"'
-                echo ""
-                echo "🔍 Template Error Details:"
-                echo "$TEMPLATE_FAILED_DETAILS" | jq -r '.[] | "   File: \(.file)\n   Template: \(.["template-name"]) v\(.version)\n   Error: \(.error)\n   Details: \(.["error-details"])\n"'
-              fi
+            if ((TOTALS[schema_fail] > 0)); then
+              echo -e "\n❌ Failed Schemas: ${TOTALS[schema_fail]}"
+              echo "$SCHEMA_FAILED_DETAILS" | jq -r '.[] | "  • \(.["schema-name"]) v\(.version)\n    Error: \(.error)\n    File: \(.file)"'
+            fi
+          fi
+          
+          # Report template results if any exist
+          if ((TOTALS[template_skip] > 0)) || ((TOTALS[template_fail] > 0)); then
+            echo -e "\n📋 TEMPLATE VALIDATION:"
+            echo "---------------------"
+            
+            if ((TOTALS[template_skip] > 0)); then
+              echo -e "\n⚠️  Skipped Templates: ${TOTALS[template_skip]}"
+              echo "$TEMPLATE_SKIPPED_DETAILS" | jq -r '.[] | "  • \(.["template-name"]) v\(.version) (\(.file))"'
             fi
             
-            echo "📝 CONSOLIDATED SUMMARY:"
-            echo "   Schemas: $SCHEMA_SKIPPED skipped, $SCHEMA_FAILED failed"
-            echo "   Templates: $TEMPLATE_SKIPPED skipped, $TEMPLATE_FAILED failed"
-            echo "   Total: $TOTAL_SKIPPED skipped, $TOTAL_FAILED failed"
-            echo ""
+            if ((TOTALS[template_fail] > 0)); then
+              echo -e "\n❌ Failed Templates: ${TOTALS[template_fail]}"
+              echo "$TEMPLATE_FAILED_DETAILS" | jq -r '.[] | "  • \(.["template-name"]) v\(.version)\n    Error: \(.error)\n    File: \(.file)"'
+            fi
+          fi
+          
+          # Print final summary
+          echo -e "\n📊 FINAL SUMMARY:"
+          echo "---------------"
+          echo "Schemas: ${TOTALS[schema_skip]} skipped, ${TOTALS[schema_fail]} failed"
+          echo "Templates: ${TOTALS[template_skip]} skipped, ${TOTALS[template_fail]} failed"
+          echo "Total: $TOTAL_SKIPPED skipped, $TOTAL_FAILED failed"
+          
+          # Provide guidance based on results
+          if ((TOTAL_ISSUES > 0)); then
+            echo -e "\n📝 GUIDANCE:"
+            echo "-----------"
             
-            # Provide guidance
-            if [[ $TOTAL_SKIPPED -gt 0 ]]; then
-              echo "⚠️  Skipped items indicate version conflicts. Please create new versions for any changes to existing versioned files."
+            if ((TOTAL_SKIPPED > 0)); then
+              echo "• Version conflicts detected. Create new versions for modified files."
             fi
             
-            if [[ $TOTAL_FAILED -gt 0 ]]; then
-              echo "❌ Failed creations require attention. Please review the errors above and fix the underlying issues."
+            if ((TOTAL_FAILED > 0)); then
+              echo "• Review error details above and fix reported issues."
+              echo "• Ensure all required fields are properly set in schema/template files."
+              echo "• Verify file permissions and paths are correct."
               exit 1
             fi
             
-            if [[ $TOTAL_SKIPPED -gt 0 ]]; then
-              echo "⚠️  The workflow completed successfully but some items were skipped due to version conflicts."
+            if ((TOTAL_SKIPPED > 0)); then
+              echo -e "\n⚠️  Workflow completed with version conflicts"
               exit 1
             fi
           else
-            echo "✅ All validations passed successfully - no issues found!"
+            echo -e "\n✅ All validations passed successfully!"
           fi
