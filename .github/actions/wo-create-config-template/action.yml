@@ -284,6 +284,58 @@ runs:
             echo "   ✅ Successfully created config template: $TEMPLATE_NAME v$TEMPLATE_VERSION"
             TEMPLATES_CREATED=$((TEMPLATES_CREATED + 1))
             FILES_CREATED=true
+            
+            # Extract resource IDs from Azure CLI response
+            CONFIG_TEMPLATE_ID=$(echo "$AZ_RESPONSE" | jq -r '.properties.configTemplateId // empty')
+            CONFIG_TEMPLATE_VERSION_ID=$(echo "$AZ_RESPONSE" | jq -r '.properties.configTemplateVersionId // empty')
+            
+            # Create metadata immediately for this template
+            echo "   📄 Creating metadata for $TEMPLATE_NAME v$TEMPLATE_VERSION..."
+            
+            # Create folder for solutions
+            FOLDER_PATH=".pg/apps/common/solutions"
+            mkdir -p "$FOLDER_PATH"
+            
+            # Create YAML file named after config template
+            YAML_FILE="$FOLDER_PATH/$TEMPLATE_NAME.yaml"
+            
+            # Check if YAML file already exists
+            if [[ -f "$YAML_FILE" ]]; then
+              echo "   Status: Metadata file exists. Checking for existing version..."
+              
+              # Check if this version already exists
+              EXISTING_VERSION=$(yq eval ".versions[] | select(.version == \"$TEMPLATE_VERSION\") | .version" "$YAML_FILE" 2>/dev/null || echo "")
+              
+              if [[ -n "$EXISTING_VERSION" ]]; then
+                echo "   ⏭️ Version $TEMPLATE_VERSION already exists in metadata. Skipping addition."
+              else
+                echo "   Status: Adding new version to existing metadata file..."
+                # Add new version to existing versions array
+                if yq eval ".versions += [{\"version\": \"$TEMPLATE_VERSION\", \"configTemplateVersionId\": \"$CONFIG_TEMPLATE_VERSION_ID\", \"revisions\": []}]" -i "$YAML_FILE"; then
+                  echo "   ✅ Added version $TEMPLATE_VERSION to existing metadata file."
+                else
+                  echo "   ⚠️ Warning: Failed to add version to metadata file"
+                fi
+              fi
+            else
+              echo "   Status: Creating new metadata file..."
+              # Create new YAML content with config template info and first version using yq
+              if yq eval -n '.configTemplateName = "'"$TEMPLATE_NAME"'"' > "$YAML_FILE" && \
+                 yq eval '.configTemplateId = "'"$CONFIG_TEMPLATE_ID"'"' -i "$YAML_FILE" && \
+                 yq eval '.versions = []' -i "$YAML_FILE" && \
+                 yq eval '.versions += [{"version": "'"$TEMPLATE_VERSION"'", "configTemplateVersionId": "'"$CONFIG_TEMPLATE_VERSION_ID"'", "revisions": []}]' -i "$YAML_FILE"; then
+                echo "   ✅ Created new metadata file with first version."
+              else
+                echo "   ⚠️ Warning: Failed to create metadata file"
+              fi
+            fi
+            
+            # Validate the final YAML file
+            if [[ -f "$YAML_FILE" ]] && yq eval '.' "$YAML_FILE" >/dev/null 2>&1; then
+              echo "   ✅ Metadata file validation passed: $YAML_FILE"
+            else
+              echo "   ⚠️ Warning: Created YAML file has invalid structure or doesn't exist"
+            fi
           fi
           
           TOTAL_PROCESSED=$((TOTAL_PROCESSED + 1))
