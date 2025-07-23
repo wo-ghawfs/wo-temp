@@ -144,7 +144,7 @@ runs:
         echo "Template files to process: $TEMPLATE_FILES"
         echo "Spec files to process: $SPEC_FILES"
         
-        # Process each template file using process substitution to avoid subshell issues
+        # Process each template file
         template_index=0
         while IFS= read -r template_file; do
           echo ""
@@ -160,35 +160,60 @@ runs:
           TEMPLATE_NAME="unknown"
           TEMPLATE_VERSION="unknown"
           
-          # Validate template file exists
+          # Validate template file exists and extract version from path
           if [[ ! -f "$template_file" ]]; then
             echo "❌ Template file not found: $template_file"
             FAILURE_REASON="Template file not found"
             FAILURE_DETAILS="Template file does not exist at specified path"
             TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
-          elif [[ ! -f "$spec_file" ]]; then
+            continue
+          fi
+          
+          if [[ ! -f "$spec_file" ]]; then
             echo "❌ Specification file not found: $spec_file"
             FAILURE_REASON="Specification file not found"
             FAILURE_DETAILS="Specification file does not exist at specified path"
             TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+            continue
+          fi
+          
+          # Extract version from path
+          if [[ "$template_file" =~ /solution-templates/([0-9]+\.[0-9]+\.[0-9]+)/ ]]; then
+            PATH_VERSION="${BASH_REMATCH[1]}"
           else
-            # Read template metadata
-            TEMPLATE_NAME=$(yq eval '.metadata.name' "$template_file" 2>/dev/null || echo "")
-            TEMPLATE_VERSION=$(yq eval '.metadata.version' "$template_file" 2>/dev/null || echo "")
-            SCHEMA_NAME=$(yq eval '.schema.name' "$template_file" 2>/dev/null || echo "")
-            SCHEMA_VERSION=$(yq eval '.schema.version' "$template_file" 2>/dev/null || echo "")
-            
-            # Override with provided values if given (single file mode only)
-            if [[ "$PROCESSING_MODE" == "single" ]]; then
-              if [[ -n "${{ inputs.solution-template-name }}" ]]; then
-                TEMPLATE_NAME="${{ inputs.solution-template-name }}"
-              fi
-              if [[ -n "${{ inputs.solution-template-version }}" ]]; then
-                TEMPLATE_VERSION="${{ inputs.solution-template-version }}"
-              fi
+            echo "❌ Could not extract version from file path: $template_file"
+            FAILURE_REASON="Invalid path format"
+            FAILURE_DETAILS="Template file must be in a versioned directory (e.g., solution-templates/1.0.0/)"
+            TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+            continue
+          fi
+          
+          # Read template metadata
+          TEMPLATE_NAME=$(yq eval '.metadata.name' "$template_file" 2>/dev/null || echo "")
+          TEMPLATE_VERSION=$(yq eval '.metadata.version' "$template_file" 2>/dev/null || echo "")
+          SCHEMA_NAME=$(yq eval '.schema.name' "$template_file" 2>/dev/null || echo "")
+          SCHEMA_VERSION=$(yq eval '.schema.version' "$template_file" 2>/dev/null || echo "")
+          
+          # Override with provided values if given (single file mode only)
+          if [[ "$PROCESSING_MODE" == "single" ]]; then
+            if [[ -n "${{ inputs.solution-template-name }}" ]]; then
+              TEMPLATE_NAME="${{ inputs.solution-template-name }}"
             fi
-            
-            if [[ -z "$TEMPLATE_NAME" || -z "$TEMPLATE_VERSION" || -z "$SCHEMA_NAME" || -z "$SCHEMA_VERSION" ]]; then
+            if [[ -n "${{ inputs.solution-template-version }}" ]]; then
+              TEMPLATE_VERSION="${{ inputs.solution-template-version }}"
+            fi
+          fi
+          
+          # Check for version mismatch
+          if [[ "$TEMPLATE_VERSION" != "$PATH_VERSION" ]]; then
+            echo "❌ Version mismatch: File path version ($PATH_VERSION) does not match template version ($TEMPLATE_VERSION)"
+            FAILURE_REASON="Version mismatch"
+            FAILURE_DETAILS="File path version ($PATH_VERSION) does not match template version ($TEMPLATE_VERSION)"
+            TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+            continue
+          fi
+          
+          if [[ -z "$TEMPLATE_NAME" || -z "$TEMPLATE_VERSION" || -z "$SCHEMA_NAME" || -z "$SCHEMA_VERSION" ]]; then
               echo "❌ Could not read template metadata from $template_file"
               echo "   Template name: '$TEMPLATE_NAME'"
               echo "   Template version: '$TEMPLATE_VERSION'" 
@@ -213,6 +238,7 @@ runs:
                 FAILURE_REASON="Schema does not exist"
                 FAILURE_DETAILS="Schema $SCHEMA_NAME v$SCHEMA_VERSION does not exist. Please ensure the schema and version exist before creating the solution template"
                 TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+                continue
               elif az workload-orchestration solution-template version show \
                     -g "${{ inputs.resource-group }}" \
                     --solution-template-name "$TEMPLATE_NAME" \

@@ -80,7 +80,7 @@ runs:
         
         echo "Schema files to process: $SCHEMA_FILES"
         
-        # Process each schema file using process substitution to avoid subshell issues
+        # Process each schema file 
         while IFS= read -r schema_file; do
           echo ""
           echo "📄 Processing schema file: $schema_file"
@@ -98,6 +98,17 @@ runs:
             FAILURE_DETAILS="Schema file does not exist at specified path"
             SCHEMAS_FAILED=$((SCHEMAS_FAILED + 1))
           else
+            # Extract version from file path
+            if [[ "$schema_file" =~ /schemas/([0-9]+\.[0-9]+\.[0-9]+)/ ]]; then
+              PATH_VERSION="${BASH_REMATCH[1]}"
+            else
+              echo "❌ Could not extract version from file path: $schema_file"
+              FAILURE_REASON="Invalid path format"
+              FAILURE_DETAILS="Schema file must be in a versioned directory (e.g., schemas/1.0.0/)"
+              SCHEMAS_FAILED=$((SCHEMAS_FAILED + 1))
+              continue
+            fi
+            
             # Read schema metadata
             SCHEMA_NAME=$(yq eval '.metadata.name' "$schema_file" 2>/dev/null || echo "")
             SCHEMA_VERSION=$(yq eval '.metadata.version' "$schema_file" 2>/dev/null || echo "")
@@ -108,6 +119,11 @@ runs:
               FAILURE_DETAILS="Could not read schema name or version from file - check YAML format"
               SCHEMA_NAME="unknown"
               SCHEMA_VERSION="unknown"
+              SCHEMAS_FAILED=$((SCHEMAS_FAILED + 1))
+            elif [[ "$SCHEMA_VERSION" != "$PATH_VERSION" ]]; then
+              echo "❌ Version mismatch: File path version ($PATH_VERSION) does not match schema version ($SCHEMA_VERSION)"
+              FAILURE_REASON="Version mismatch"
+              FAILURE_DETAILS="File path version ($PATH_VERSION) does not match schema version ($SCHEMA_VERSION)"
               SCHEMAS_FAILED=$((SCHEMAS_FAILED + 1))
             else
               echo "   Schema: $SCHEMA_NAME"
