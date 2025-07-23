@@ -106,14 +106,15 @@ jobs:
         if: github.event_name == 'push' || github.event_name == 'workflow_run'
         id: app-list
         run: |
-          # Get all changed files and extract unique app names
+          # Get all changed files and extract unique app names, handle empty case properly
           APPS=$(echo "${{ steps.changed-files.outputs.all_changed_files }}" | 
                  grep -o '\.pg/apps/[^/]*/' | 
                  sed 's/\.pg\/apps\///' | 
                  sed 's/\///' | 
                  grep -v '^common$' | 
+                 grep -v '^$' | 
                  sort -u | 
-                 jq -R -s -c 'split("\n")[:-1]')
+                 jq -R -s -c 'if . == "" then [] else split("\n") end')
           echo "apps=$APPS" >> $GITHUB_OUTPUT
 
       - name: Detect versioned file changes only
@@ -123,11 +124,12 @@ jobs:
           # Initialize app changes object
           APP_CHANGES="{}"
           
-          # Get all changed files
-          CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+          # Get all changed files and filter out empty entries
+          CHANGED_FILES=$(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -v '^$' || echo "")
           
           # Process each changed file - ONLY process versioned files
-          while IFS= read -r file; do
+          if [[ -n "$CHANGED_FILES" ]]; then
+            while IFS= read -r file; do
             app_name=""
             folder_type=""
             version=""
@@ -165,7 +167,8 @@ jobs:
                 APP_CHANGES=$(echo "$APP_CHANGES" | jq --arg app "$app_name" --arg version "$version" '.[$app].solution_templates |= if . | index($version) then . else . + [$version] end')
               fi
             fi
-          done <<< "$(echo "$CHANGED_FILES" | tr ' ' '\n')"
+            done <<< "$(echo "$CHANGED_FILES" | tr ' ' '\n')"
+          fi
           
           # Write to temporary file and read back (to handle while loop subshell issue)
           echo "$APP_CHANGES" > /tmp/app_changes.json
@@ -209,8 +212,8 @@ jobs:
             fi
           done
 
-          # Convert validated apps to JSON array
-          APPS=$(printf '%s\n' "${VALID_APPS[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          # Convert validated apps to JSON array, handle empty case properly
+          APPS=$(printf '%s\n' "${VALID_APPS[@]}" | grep -v '^$' | jq -R -s -c 'if . == "" then [] else split("\n") end')
           echo "apps=$APPS" >> $GITHUB_OUTPUT
           echo "✅ Final app list: $APPS"
 
@@ -434,10 +437,10 @@ jobs:
             fi
           fi
           
-          # Convert arrays to JSON
-          SCHEMA_FILES_JSON=$(printf '%s\n' "${SCHEMA_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
-          TEMPLATE_FILES_JSON=$(printf '%s\n' "${TEMPLATE_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
-          SPEC_FILES_JSON=$(printf '%s\n' "${SPEC_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          # Convert arrays to JSON - filter out empty strings and handle empty arrays
+          SCHEMA_FILES_JSON=$(printf '%s\n' "${SCHEMA_FILES[@]}" | grep -v '^$' | jq -R -s -c 'if . == "" then [] else split("\n") end')
+          TEMPLATE_FILES_JSON=$(printf '%s\n' "${TEMPLATE_FILES[@]}" | grep -v '^$' | jq -R -s -c 'if . == "" then [] else split("\n") end')
+          SPEC_FILES_JSON=$(printf '%s\n' "${SPEC_FILES[@]}" | grep -v '^$' | jq -R -s -c 'if . == "" then [] else split("\n") end')
           
           # Set outputs
           echo "create_schema=$CREATE_SCHEMA" >> $GITHUB_OUTPUT

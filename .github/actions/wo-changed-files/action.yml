@@ -25,14 +25,21 @@ runs:
       id: changes
       shell: bash
       run: |
-        echo "changedfiles=$(git diff --name-only HEAD^1 HEAD | xargs)" >> $GITHUB_OUTPUT
+        # Get changed files and filter out empty results
+        CHANGED=$(git diff --name-only HEAD^1 HEAD | grep -v '^$' || true)
+        if [[ -n "$CHANGED" ]]; then
+          echo "changedfiles=$(echo "$CHANGED" | xargs)" >> $GITHUB_OUTPUT
+        else
+          echo "changedfiles=" >> $GITHUB_OUTPUT
+        fi
 
     - name: Filter and validate changes
       id: filter
       shell: bash
       run: |
         MATCHED=""
-        for file in ${{ steps.changes.outputs.changedfiles }}; do
+        if [[ -n "${{ steps.changes.outputs.changedfiles }}" ]]; then
+          for file in ${{ steps.changes.outputs.changedfiles }}; do
           if [[ "$file" == ${{ inputs.files }} ]]; then
             echo "$file was changed"
             # Try to validate yaml files with yq
@@ -41,5 +48,11 @@ runs:
             fi
             MATCHED+="$file "
           fi
-        done
-        echo "all_changed_files=$MATCHED" >> $GITHUB_OUTPUT
+          done
+        fi
+        # If no matches, set empty output
+        if [[ -z "$MATCHED" ]]; then
+          echo "all_changed_files=" >> $GITHUB_OUTPUT
+        else
+          echo "all_changed_files=$MATCHED" >> $GITHUB_OUTPUT
+        fi
