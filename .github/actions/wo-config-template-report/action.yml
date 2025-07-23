@@ -1,0 +1,74 @@
+name: Report Config Template Results
+description: Reports validation results for config template processing
+
+inputs:
+  templates-skipped:
+    description: 'Number of templates that were skipped'
+    required: true
+  templates-failed:
+    description: 'Number of templates that failed'
+    required: true
+  skipped-templates-details:
+    description: 'JSON array with details of skipped templates'
+    required: true
+  failed-templates-details:
+    description: 'JSON array with details of failed templates'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Report Config Template Results
+      shell: bash
+      run: |
+        TOTAL_SKIPPED="${{ inputs.templates-skipped }}"
+        TOTAL_FAILED="${{ inputs.templates-failed }}"
+        SKIPPED_DETAILS='${{ inputs.skipped-templates-details }}'
+        FAILED_DETAILS='${{ inputs.failed-templates-details }}'
+        
+        echo "📊 Config Template Results:"
+        echo "   Total skipped: $TOTAL_SKIPPED"
+        echo "   Total failed: $TOTAL_FAILED"
+        
+        if [[ $TOTAL_SKIPPED -gt 0 || $TOTAL_FAILED -gt 0 ]]; then
+          echo ""
+          echo "🚨 Config Template Issues Found:"
+          echo ""
+          
+          if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
+            echo "⏭️  Skipped Templates (Version Conflicts): $TOTAL_SKIPPED"
+            echo "The following template versions were skipped because they already exist:"
+            echo "$SKIPPED_DETAILS" | jq -r '.[] | "   - \(.["template-name"]) v\(.version) (\(.file))"'
+            echo ""
+          fi
+          
+          if [[ "$TOTAL_FAILED" -gt 0 ]]; then
+            echo "❌ Failed Template Creations: $TOTAL_FAILED"
+            echo "The following template creations failed:"
+            echo "$FAILED_DETAILS" | jq -r '.[] | "   - \(.["template-name"]) v\(.version): \(.error) (\(.file))"'
+            echo ""
+            echo "🔍 Detailed Error Information:"
+            echo "$FAILED_DETAILS" | jq -r '.[] | "   File: \(.file)\n   Template: \(.["template-name"]) v\(.version)\n   Error: \(.error)\n   Details: \(.["error-details"])\n"'
+          fi
+          
+          echo "📝 Summary:"
+          echo "   Total templates skipped: $TOTAL_SKIPPED"
+          echo "   Total templates failed: $TOTAL_FAILED"
+          echo ""
+          
+          if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
+            echo "⚠️  Skipped templates indicate version conflicts. Please create new versions for any changes to existing versioned files."
+          fi
+          
+          if [[ "$TOTAL_FAILED" -gt 0 ]]; then
+            echo "❌ Failed template creations require attention. Please review the errors above and fix the underlying issues."
+            exit 1
+          fi
+          
+          if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
+            echo "⚠️  The workflow completed successfully but some templates were skipped due to version conflicts."
+            exit 1
+          fi
+        else
+          echo "✅ All config template validations passed successfully"
+        fi

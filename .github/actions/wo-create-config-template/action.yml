@@ -3,19 +3,29 @@ description: Creates an Azure Workload Orchestration Config Template using provi
 
 outputs:
   files_created:
-    description: 'Whether config template metadata files were created'
-    value: ${{ steps.create-metadata.outputs.files_created }}
+    description: 'Whether config template files were created'
+    value: ${{ steps.process-templates.outputs.files_created }}
+  templates-skipped:
+    description: 'Number of templates that were skipped (already existed)'
+    value: ${{ steps.process-templates.outputs.templates_skipped }}
+  templates-failed:
+    description: 'Number of templates that failed to create'
+    value: ${{ steps.process-templates.outputs.templates_failed }}
+  skipped-templates-details:
+    description: 'JSON array with details of skipped templates'
+    value: ${{ steps.process-templates.outputs.skipped_templates_details }}
+  failed-templates-details:
+    description: 'JSON array with details of failed templates'
+    value: ${{ steps.process-templates.outputs.failed_templates_details }}
 
 inputs:
-  azure-credentials:
-    description: 'Azure credentials for authentication'
-    required: true
   resource-group:
     description: 'Azure Resource Group name'
     required: true
   location:
     description: 'Azure region location'
     required: true
+  # Original inputs (for backward compatibility)
   config-template-name:
     description: 'Name of the config template (if not provided, read from template file)'
     required: false
@@ -23,154 +33,348 @@ inputs:
     description: 'Version of the config template (if not provided, read from template file)'
     required: false
   config-template-file:
-    description: 'Path to the configuration template file'
-    required: true
+    description: 'Path to the configuration template file (single file mode)'
+    required: false
   description:
     description: 'Description of the config template'
+    required: false
+    default: 'Common configuration template for shared settings'
+  # Batch processing inputs
+  config-template-files:
+    description: 'JSON array of config template file paths for batch processing'
     required: false
     
 runs:
   using: composite
   steps:
-    - name: Read Template Metadata
+    - name: Determine Processing Mode
       shell: bash
       run: |
-        # Read values from template file
-        TEMPLATE_FILE="${{ inputs.config-template-file }}"
-        
-        # Read schema information
-        SCHEMA_NAME=$(yq eval '.schema.name' "$TEMPLATE_FILE")
-        SCHEMA_VERSION=$(yq eval '.schema.version' "$TEMPLATE_FILE")
-
-        # Get config template name/version from metadata (if present) or use defaults
-        if [ -n "${{ inputs.config-template-name }}" ]; then
-          FINAL_NAME="${{ inputs.config-template-name }}"
+        if [[ -n "${{ inputs.config-template-files }}" ]]; then
+          echo "PROCESSING_MODE=batch" >> $GITHUB_ENV
+          echo "Using batch processing mode"
+        elif [[ -n "${{ inputs.config-template-file }}" ]]; then
+          echo "PROCESSING_MODE=single" >> $GITHUB_ENV
+          echo "Using single file mode (backward compatibility)"
         else
-          TEMPLATE_NAME=$(yq eval '.metadata.name' "$TEMPLATE_FILE" || echo "")
-          FINAL_NAME=${TEMPLATE_NAME:-"common-config"}  # Default if not provided
-        fi
-
-        if [ -n "${{ inputs.version }}" ]; then
-          FINAL_VERSION="${{ inputs.version }}"
-        else
-          TEMPLATE_VERSION=$(yq eval '.metadata.version' "$TEMPLATE_FILE" || echo "")
-          if [ -z "$TEMPLATE_VERSION" ]; then
-            echo "Error: Version must be provided either in template file or as input"
-            exit 1
-          fi
-          FINAL_VERSION="$TEMPLATE_VERSION"
-        fi
-
-        # Set environment variables for next steps
-        echo "CONFIG_NAME=$FINAL_NAME" >> $GITHUB_ENV
-        echo "CONFIG_VERSION=$FINAL_VERSION" >> $GITHUB_ENV
-        echo "SCHEMA_NAME=$SCHEMA_NAME" >> $GITHUB_ENV
-        echo "SCHEMA_VERSION=$SCHEMA_VERSION" >> $GITHUB_ENV
-    
-    - name: Check Schema Version
-      shell: bash
-      run: |
-        if ! az workload-orchestration schema version show \
-          -g ${{ inputs.resource-group }} \
-          --schema-name ${{ env.SCHEMA_NAME }} \
-          -v ${{ env.SCHEMA_VERSION }}; then
-          echo "Error: Schema version ${{ env.SCHEMA_VERSION }} does not exist for schema ${{ env.SCHEMA_NAME }}"
-          echo "Please ensure the schema exists before creating the config template."
+          echo "Error: Either config-template-files or config-template-file must be provided"
           exit 1
         fi
-        echo "Schema version exists. Proceeding."
-    
-    - name: Create Config Template
-      shell: bash
-      run: |
-        
-        # Check if config template version already exists
-        if ! az workload-orchestration config-template version show \
-          -g ${{ inputs.resource-group }} \
-          --config-template-name ${{ env.CONFIG_NAME }} \
-          -v ${{ env.CONFIG_VERSION }}; then
-          
-          echo "Config template version not found. Creating new config template..."
-          
-          # Capture the response from Azure CLI
-          RESPONSE=$(az workload-orchestration config-template create \
-            -g ${{ inputs.resource-group }} \
-            -l ${{ inputs.location }} \
-            --config-template-name ${{ env.CONFIG_NAME }} \
-            --config-template-file "${{ inputs.config-template-file }}" \
-            --version ${{ env.CONFIG_VERSION }} \
-            --description "${{ inputs.description }}" \
-            --output json)
-          
-          echo "Azure CLI Response:"
-          echo "$RESPONSE"
-          
-          # Extract resource IDs from the response
-          CONFIG_TEMPLATE_ID=$(echo "$RESPONSE" | jq -r '.resourceId // empty')
-          CONFIG_TEMPLATE_VERSION_ID=$(echo "$RESPONSE" | jq -r '.properties.id // empty')
-          
-          # Set environment variables for use in metadata creation
-          echo "CONFIG_TEMPLATE_ID=$CONFIG_TEMPLATE_ID" >> $GITHUB_ENV
-          echo "CONFIG_TEMPLATE_VERSION_ID=$CONFIG_TEMPLATE_VERSION_ID" >> $GITHUB_ENV
-          echo "CONFIG_CREATED=true" >> $GITHUB_ENV
-          
-          echo "Extracted Resource IDs:"
-          echo "  Config Template ID: $CONFIG_TEMPLATE_ID"
-          echo "  Config Template Version ID: $CONFIG_TEMPLATE_VERSION_ID"
-        else
-          echo "Config template version already exists. Skipping creation."
-          echo "CONFIG_CREATED=false" >> $GITHUB_ENV
-        fi
 
-    - name: Create Config Template Metadata
-      id: create-metadata
-      if: env.CONFIG_CREATED == 'true'
+    - name: Process Config Templates
+      id: process-templates
       shell: bash
       run: |
-        # Create folder for solutions
-        FOLDER_PATH=".pg/apps/common/solutions"
-        mkdir -p "$FOLDER_PATH"
+        # Initialize counters and arrays for tracking results
+        TEMPLATES_CREATED=0
+        TEMPLATES_SKIPPED=0
+        TEMPLATES_FAILED=0
+        SKIPPED_TEMPLATES_DETAILS="[]"
+        FAILED_TEMPLATES_DETAILS="[]"
+        FILES_CREATED=false
+        TOTAL_PROCESSED=0
         
-        # Create YAML file named after config template
-        YAML_FILE="$FOLDER_PATH/${{ env.CONFIG_NAME }}.yaml"
+        # Determine processing mode and prepare file arrays
+        if [[ "$PROCESSING_MODE" == "batch" ]]; then
+          echo "🔧 Batch mode: Processing multiple config template files"
+          TEMPLATE_FILES='${{ inputs.config-template-files }}'
+          
+          # Get array length
+          TEMPLATE_COUNT=$(echo "$TEMPLATE_FILES" | jq 'length')
+          
+          echo "Processing $TEMPLATE_COUNT template files..."
+        else
+          echo "🔧 Single file mode: Processing ${{ inputs.config-template-file }}"
+          TEMPLATE_FILES='["${{ inputs.config-template-file }}"]'
+        fi
         
-        # Check if YAML file already exists
-        if [ -f "$YAML_FILE" ]; then
-          echo "YAML file exists. Checking for existing version..."
+        echo "Template files to process: $TEMPLATE_FILES"
+        
+        # Process each template file
+        template_index=0
+        while IFS= read -r template_file; do
+          echo ""
+          echo "📄 Processing template file: $template_file"
           
-          # Check if this version already exists
-          EXISTING_VERSION=$(yq eval ".versions[] | select(.version == \"${{ env.CONFIG_VERSION }}\") | .version" "$YAML_FILE" 2>/dev/null || echo "")
+          # Initialize failure tracking for this file
+          FAILURE_REASON=""
+          FAILURE_DETAILS=""
+          TEMPLATE_NAME="unknown"
+          TEMPLATE_VERSION="unknown"
           
-          if [ -n "$EXISTING_VERSION" ]; then
-            echo "Version ${{ env.CONFIG_VERSION }} already exists in $YAML_FILE. Skipping addition."
-          else
-            echo "Adding new version to existing YAML file..."
-            # Add new version to existing versions array
-            yq eval ".versions += [{\"version\": \"${{ env.CONFIG_VERSION }}\", \"configTemplateVersionId\": \"${{ env.CONFIG_TEMPLATE_VERSION_ID }}\", \"revisions\": []}]" -i "$YAML_FILE"
-            echo "Added version ${{ env.CONFIG_VERSION }} to existing YAML file."
+          # Validate template file exists and extract version from path
+          if [[ ! -f "$template_file" ]]; then
+            echo "❌ Template file not found: $template_file"
+            FAILURE_REASON="Template file not found"
+            FAILURE_DETAILS="Template file does not exist at specified path"
+            TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+            continue
           fi
-        else
-          echo "Creating new YAML file..."
-          # Create new YAML content with config template info and first version using yq
-          yq eval -n '.configTemplateName = "'"${{ env.CONFIG_NAME }}"'"' > "$YAML_FILE"
-          yq eval '.configTemplateId = "'"${{ env.CONFIG_TEMPLATE_ID }}"'"' -i "$YAML_FILE"
-          yq eval '.versions = []' -i "$YAML_FILE"
-          yq eval '.versions += [{"version": "'"${{ env.CONFIG_VERSION }}"'", "configTemplateVersionId": "'"${{ env.CONFIG_TEMPLATE_VERSION_ID }}"'", "revisions": []}]' -i "$YAML_FILE"
-          echo "Created new YAML file with first version."
+          
+          # Extract version from path
+          if [[ "$template_file" =~ /config-templates/([0-9]+\.[0-9]+\.[0-9]+)/ ]]; then
+            PATH_VERSION="${BASH_REMATCH[1]}"
+          else
+            echo "❌ Could not extract version from file path: $template_file"
+            FAILURE_REASON="Invalid path format"
+            FAILURE_DETAILS="Template file must be in a versioned directory (e.g., config-templates/1.0.0/)"
+            TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+            
+            # Add failure details
+            ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+            FAILED_ENTRY=$(jq -n \
+              --arg file "$ESCAPED_FILE" \
+              --arg name "$TEMPLATE_NAME" \
+              --arg version "unknown" \
+              --arg error "$FAILURE_REASON" \
+              --arg details "$FAILURE_DETAILS" \
+              '{file: $file, "template-name": $name, version: $version, error: $error, "error-details": $details}')
+            
+            FAILED_TEMPLATES_DETAILS=$(echo "$FAILED_TEMPLATES_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
+            continue
+          fi
+          
+          # Read template metadata
+          TEMPLATE_NAME=$(yq eval '.metadata.name' "$template_file" 2>/dev/null || echo "")
+          TEMPLATE_VERSION=$(yq eval '.metadata.version' "$template_file" 2>/dev/null || echo "")
+          SCHEMA_NAME=$(yq eval '.schema.name' "$template_file" 2>/dev/null || echo "")
+          SCHEMA_VERSION=$(yq eval '.schema.version' "$template_file" 2>/dev/null || echo "")
+          
+          # Override with provided values if given (single file mode only)
+          if [[ "$PROCESSING_MODE" == "single" ]]; then
+            if [[ -n "${{ inputs.config-template-name }}" ]]; then
+              TEMPLATE_NAME="${{ inputs.config-template-name }}"
+            fi
+            if [[ -n "${{ inputs.version }}" ]]; then
+              TEMPLATE_VERSION="${{ inputs.version }}"
+            fi
+          fi
+          
+          # Check for version mismatch
+          if [[ "$TEMPLATE_VERSION" != "$PATH_VERSION" ]]; then
+            echo "❌ Version mismatch: File path version ($PATH_VERSION) does not match template version ($TEMPLATE_VERSION)"
+            FAILURE_REASON="Version mismatch"
+            FAILURE_DETAILS="File path version ($PATH_VERSION) does not match template version ($TEMPLATE_VERSION)"
+            TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+            
+            # Add failure details
+            ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+            ESCAPED_TEMPLATE_NAME=$(echo "$TEMPLATE_NAME" | sed 's/"/\\"/g')
+            FAILED_ENTRY=$(jq -n \
+              --arg file "$ESCAPED_FILE" \
+              --arg name "$ESCAPED_TEMPLATE_NAME" \
+              --arg version "$TEMPLATE_VERSION" \
+              --arg error "$FAILURE_REASON" \
+              --arg details "$FAILURE_DETAILS" \
+              '{file: $file, "template-name": $name, version: $version, error: $error, "error-details": $details}')
+            
+            FAILED_TEMPLATES_DETAILS=$(echo "$FAILED_TEMPLATES_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
+            continue
+          fi
+          
+          if [[ -z "$TEMPLATE_NAME" || -z "$TEMPLATE_VERSION" || -z "$SCHEMA_NAME" || -z "$SCHEMA_VERSION" ]]; then
+            echo "❌ Could not read template metadata from $template_file"
+            echo "   Template name: '$TEMPLATE_NAME'"
+            echo "   Template version: '$TEMPLATE_VERSION'" 
+            echo "   Schema name: '$SCHEMA_NAME'"
+            echo "   Schema version: '$SCHEMA_VERSION'"
+            FAILURE_REASON="Metadata parse error"
+            FAILURE_DETAILS="Could not read template name, version, schema name, or schema version from file - check YAML format"
+            
+            # Add failure details
+            ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+            FAILED_ENTRY=$(jq -n \
+              --arg file "$ESCAPED_FILE" \
+              --arg name "unknown" \
+              --arg version "unknown" \
+              --arg error "$FAILURE_REASON" \
+              --arg details "$FAILURE_DETAILS" \
+              '{file: $file, "template-name": $name, version: $version, error: $error, "error-details": $details}')
+            
+            FAILED_TEMPLATES_DETAILS=$(echo "$FAILED_TEMPLATES_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
+            TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+          else
+            echo "   Template: $TEMPLATE_NAME"
+            echo "   Version: $TEMPLATE_VERSION"
+            echo "   Schema: $SCHEMA_NAME v$SCHEMA_VERSION"
+            
+            # Check if required schema version exists
+            if ! az workload-orchestration schema version show \
+                  -g "${{ inputs.resource-group }}" \
+                  --schema-name "$SCHEMA_NAME" \
+                  -v "$SCHEMA_VERSION" >/dev/null 2>&1; then
+              echo "   ❌ Required schema does not exist: $SCHEMA_NAME v$SCHEMA_VERSION"
+              FAILURE_REASON="Schema does not exist"
+              FAILURE_DETAILS="Schema $SCHEMA_NAME v$SCHEMA_VERSION does not exist. Please ensure the schema and version exist before creating the config template"
+              TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+              
+              # Add failure details
+              ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+              ESCAPED_TEMPLATE_NAME=$(echo "$TEMPLATE_NAME" | sed 's/"/\\"/g')
+              ESCAPED_TEMPLATE_VERSION=$(echo "$TEMPLATE_VERSION" | sed 's/"/\\"/g')
+              FAILED_ENTRY=$(jq -n \
+                --arg file "$ESCAPED_FILE" \
+                --arg name "$ESCAPED_TEMPLATE_NAME" \
+                --arg version "$ESCAPED_TEMPLATE_VERSION" \
+                --arg error "$FAILURE_REASON" \
+                --arg details "$FAILURE_DETAILS" \
+                '{file: $file, "template-name": $name, version: $version, error: $error, "error-details": $details}')
+              
+              FAILED_TEMPLATES_DETAILS=$(echo "$FAILED_TEMPLATES_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
+              continue
+            fi
+            
+            # Check if template version already exists
+            if az workload-orchestration config-template version show \
+                  -g "${{ inputs.resource-group }}" \
+                  --config-template-name "$TEMPLATE_NAME" \
+                  -v "$TEMPLATE_VERSION" >/dev/null 2>&1; then
+              echo "   ⏭️  Config template version already exists. Skipping creation."
+              TEMPLATES_SKIPPED=$((TEMPLATES_SKIPPED + 1))
+              
+              # Add to skipped templates details
+              ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+              ESCAPED_TEMPLATE_NAME=$(echo "$TEMPLATE_NAME" | sed 's/"/\\"/g')
+              ESCAPED_TEMPLATE_VERSION=$(echo "$TEMPLATE_VERSION" | sed 's/"/\\"/g')
+              
+              SKIPPED_ENTRY=$(jq -n \
+                --arg file "$ESCAPED_FILE" \
+                --arg name "$ESCAPED_TEMPLATE_NAME" \
+                --arg version "$ESCAPED_TEMPLATE_VERSION" \
+                --arg reason "Config template version already exists" \
+                '{file: $file, "template-name": $name, version: $version, reason: $reason}')
+              
+              SKIPPED_TEMPLATES_DETAILS=$(echo "$SKIPPED_TEMPLATES_DETAILS" | jq --argjson entry "$SKIPPED_ENTRY" '. + [$entry]')
+              continue
+            fi
+            
+            echo "   Status: Creating new config template..."
+            
+            # Create config template - capture response and errors
+            if ! AZ_RESPONSE=$(az workload-orchestration config-template create \
+                 -g "${{ inputs.resource-group }}" \
+                 -l "${{ inputs.location }}" \
+                 --config-template-name "$TEMPLATE_NAME" \
+                 --config-template-file "$template_file" \
+                 --version "$TEMPLATE_VERSION" \
+                 --description "${{ inputs.description }}" \
+                 --output json 2>&1); then
+              echo "   ❌ Failed to create config template: $TEMPLATE_NAME v$TEMPLATE_VERSION"
+              FAILURE_REASON="Azure CLI creation failed"
+              FAILURE_DETAILS="$AZ_RESPONSE"
+              TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+              
+              # Add failure details
+              ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+              ESCAPED_TEMPLATE_NAME=$(echo "$TEMPLATE_NAME" | sed 's/"/\\"/g')
+              ESCAPED_TEMPLATE_VERSION=$(echo "$TEMPLATE_VERSION" | sed 's/"/\\"/g')
+              ESCAPED_RESPONSE=$(echo "$AZ_RESPONSE" | sed 's/"/\\"/g' | tr '\n' ' ')
+              FAILED_ENTRY=$(jq -n \
+                --arg file "$ESCAPED_FILE" \
+                --arg name "$ESCAPED_TEMPLATE_NAME" \
+                --arg version "$ESCAPED_TEMPLATE_VERSION" \
+                --arg error "$FAILURE_REASON" \
+                --arg details "$ESCAPED_RESPONSE" \
+                '{file: $file, "template-name": $name, version: $version, error: $error, "error-details": $details}')
+              
+              FAILED_TEMPLATES_DETAILS=$(echo "$FAILED_TEMPLATES_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
+              continue
+            fi
+            
+            echo "   ✅ Successfully created config template: $TEMPLATE_NAME v$TEMPLATE_VERSION"
+            TEMPLATES_CREATED=$((TEMPLATES_CREATED + 1))
+            FILES_CREATED=true
+            
+            # Extract resource IDs from Azure CLI response
+            CONFIG_TEMPLATE_ID=$(echo "$AZ_RESPONSE" | jq -r '.properties.configTemplateId // empty')
+            CONFIG_TEMPLATE_VERSION_ID=$(echo "$AZ_RESPONSE" | jq -r '.properties.configTemplateVersionId // empty')
+            
+            # Create metadata immediately for this template
+            echo "   📄 Creating metadata for $TEMPLATE_NAME v$TEMPLATE_VERSION..."
+            
+            # Create folder for solutions
+            FOLDER_PATH=".pg/apps/common/solutions"
+            mkdir -p "$FOLDER_PATH"
+            
+            # Create YAML file named after config template
+            YAML_FILE="$FOLDER_PATH/$TEMPLATE_NAME.yaml"
+            
+            # Check if YAML file already exists
+            if [[ -f "$YAML_FILE" ]]; then
+              echo "   Status: Metadata file exists. Checking for existing version..."
+              
+              # Check if this version already exists
+              EXISTING_VERSION=$(yq eval ".versions[] | select(.version == \"$TEMPLATE_VERSION\") | .version" "$YAML_FILE" 2>/dev/null || echo "")
+              
+              if [[ -n "$EXISTING_VERSION" ]]; then
+                echo "   ⏭️ Version $TEMPLATE_VERSION already exists in metadata. Skipping addition."
+              else
+                echo "   Status: Adding new version to existing metadata file..."
+                # Add new version to existing versions array
+                if yq eval ".versions += [{\"version\": \"$TEMPLATE_VERSION\", \"configTemplateVersionId\": \"$CONFIG_TEMPLATE_VERSION_ID\", \"revisions\": []}]" -i "$YAML_FILE"; then
+                  echo "   ✅ Added version $TEMPLATE_VERSION to existing metadata file."
+                else
+                  echo "   ⚠️ Warning: Failed to add version to metadata file"
+                fi
+              fi
+            else
+              echo "   Status: Creating new metadata file..."
+              # Create new YAML content with config template info and first version using yq
+              if yq eval -n '.configTemplateName = "'"$TEMPLATE_NAME"'"' > "$YAML_FILE" && \
+                 yq eval '.configTemplateId = "'"$CONFIG_TEMPLATE_ID"'"' -i "$YAML_FILE" && \
+                 yq eval '.versions = []' -i "$YAML_FILE" && \
+                 yq eval '.versions += [{"version": "'"$TEMPLATE_VERSION"'", "configTemplateVersionId": "'"$CONFIG_TEMPLATE_VERSION_ID"'", "revisions": []}]' -i "$YAML_FILE"; then
+                echo "   ✅ Created new metadata file with first version."
+              else
+                echo "   ⚠️ Warning: Failed to create metadata file"
+              fi
+            fi
+            
+            # Validate the final YAML file
+            if [[ -f "$YAML_FILE" ]] && yq eval '.' "$YAML_FILE" >/dev/null 2>&1; then
+              echo "   ✅ Metadata file validation passed: $YAML_FILE"
+            else
+              echo "   ⚠️ Warning: Created YAML file has invalid structure or doesn't exist"
+            fi
+          fi
+          
+          TOTAL_PROCESSED=$((TOTAL_PROCESSED + 1))
+          template_index=$((template_index + 1))
+        done < <(echo "$TEMPLATE_FILES" | jq -r '.[]')
+        
+        # Compact JSON arrays for output
+        SKIPPED_TEMPLATES_COMPACT=$(echo "$SKIPPED_TEMPLATES_DETAILS" | jq -c .)
+        FAILED_TEMPLATES_COMPACT=$(echo "$FAILED_TEMPLATES_DETAILS" | jq -c .)
+        
+        # Set all outputs
+        echo "files_created=$FILES_CREATED" >> $GITHUB_OUTPUT
+        echo "templates_skipped=$TEMPLATES_SKIPPED" >> $GITHUB_OUTPUT
+        echo "templates_failed=$TEMPLATES_FAILED" >> $GITHUB_OUTPUT
+        echo "skipped_templates_details=$SKIPPED_TEMPLATES_COMPACT" >> $GITHUB_OUTPUT
+        echo "failed_templates_details=$FAILED_TEMPLATES_COMPACT" >> $GITHUB_OUTPUT
+        
+        echo ""
+        echo "📊 Config Template Processing Summary:"
+        echo "   Total processed: $TOTAL_PROCESSED"
+        echo "   Templates created: $TEMPLATES_CREATED"
+        echo "   Templates skipped: $TEMPLATES_SKIPPED"
+        echo "   Templates failed: $TEMPLATES_FAILED"
+        echo "   Files created: $FILES_CREATED"
+        
+        # Show detailed skipped information if there are skipped templates
+        if [[ "$TEMPLATES_SKIPPED" -gt 0 ]]; then
+          echo ""
+          echo "⏭️ Skipped Templates Details:"
+          echo "$SKIPPED_TEMPLATES_DETAILS" | jq -r '.[] | "   - \(.["template-name"]) v\(.version) (\(.file))"'
         fi
-
-        echo "Config template metadata:"
-        echo "  Folder: $FOLDER_PATH"
-        echo "  File: $YAML_FILE"
-        echo "  Content:"
-        cat "$YAML_FILE"
-                  
-        # Set output to indicate files were created
-        echo "files_created=true" >> $GITHUB_OUTPUT
-
-    - name: Set No Files Created Output
-      id: no-files
-      if: env.CONFIG_CREATED != 'true'
-      shell: bash
-      run: |
-        echo "files_created=false" >> $GITHUB_OUTPUT
+        
+        # Show detailed failure information if there are failures
+        if [[ "$TEMPLATES_FAILED" -gt 0 ]]; then
+          echo ""
+          echo "❌ Failed Templates Details:"
+          echo "$FAILED_TEMPLATES_DETAILS" | jq -r '.[] | "   - \(.["template-name"]) v\(.version): \(.error) (\(.file))"'
+          
+          echo ""
+          echo "🔍 Detailed Error Information:"
+          echo "$FAILED_TEMPLATES_DETAILS" | jq -r '.[] | "   File: \(.file)\n   Template: \(.["template-name"]) v\(.version)\n   Error: \(.error)\n   Details: \(.["error-details"])\n"'
+        fi

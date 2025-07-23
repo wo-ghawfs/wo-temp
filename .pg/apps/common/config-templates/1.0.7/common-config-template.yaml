@@ -1,0 +1,9 @@
+metadata:
+  name: common-config-temp
+  version: 1.0.7 
+schema: 
+  name: common-sch
+  version: 1.0.1
+configs:
+  SqlServerEndpoint: http://localhost/SqlServerEndpoint
+  LineHealthEndpoint: http://localhost/LineHealthEndpoint
