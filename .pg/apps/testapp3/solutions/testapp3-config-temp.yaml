@@ -7,3 +7,6 @@ versions:
   - version: 2.0.0
     solutionTemplateVersionId: /subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/jn-ghawf-euap/providers/Microsoft.Edge/solutionTemplates/testapp3-config-temp/versions/2.0.0
     revisions: []
+  - version: 3.0.0
+    solutionTemplateVersionId: /subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/jn-ghawf-euap/providers/Microsoft.Edge/solutionTemplates/testapp3-config-temp/versions/3.0.0
+    revisions: []
