@@ -610,31 +610,118 @@ jobs:
           SCHEMA_FILES=()
           CONFIG_FILES=()
 
-          # Find all versioned schema files
-          for schema_dir in .pg/apps/common/schemas/*/; do
-            if [[ -d "$schema_dir" ]]; then
-              version=$(basename "$schema_dir")
-              # Check for both naming patterns
-              if [[ -f "$schema_dir/common-schema.yaml" ]]; then
-                SCHEMA_FILES+=("$schema_dir/common-schema.yaml")
-              elif [[ -f "$schema_dir/schema.yaml" ]]; then
-                SCHEMA_FILES+=("$schema_dir/schema.yaml")
-              fi
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "Manual dispatch - processing specified versions only"
+            
+            # Process schema versions from input or find all if not specified
+            if [[ -n "${{ github.event.inputs.schema_versions }}" ]]; then
+              echo "Using specified schema versions: ${{ github.event.inputs.schema_versions }}"
+              IFS=',' read -ra SCHEMA_VERSIONS <<< "${{ github.event.inputs.schema_versions }}"
+            else
+              echo "No schema versions specified, finding all available versions"
+              SCHEMA_VERSIONS=()
+              for schema_dir in .pg/apps/common/schemas/*/; do
+                if [[ -d "$schema_dir" && "$(basename "$schema_dir")" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                  SCHEMA_VERSIONS+=("$(basename "$schema_dir")")
+                fi
+              done
             fi
-          done
 
-          # Find all versioned config template files
-          for config_dir in .pg/apps/common/config-templates/*/; do
-            if [[ -d "$config_dir" ]]; then
-              version=$(basename "$config_dir")
-              # Check for both naming patterns
-              if [[ -f "$config_dir/common-config-template.yaml" ]]; then
-                CONFIG_FILES+=("$config_dir/common-config-template.yaml")
-              elif [[ -f "$config_dir/config-template.yaml" ]]; then
-                CONFIG_FILES+=("$config_dir/config-template.yaml")
+            # Process each specified schema version
+            for version in "${SCHEMA_VERSIONS[@]}"; do
+              version=$(echo "$version" | xargs)  # Trim whitespace
+              schema_dir=".pg/apps/common/schemas/$version"
+              if [[ -d "$schema_dir" ]]; then
+                # Check for both naming patterns
+                if [[ -f "$schema_dir/common-schema.yaml" ]]; then
+                  SCHEMA_FILES+=("$schema_dir/common-schema.yaml")
+                  echo "Found schema file: $schema_dir/common-schema.yaml"
+                elif [[ -f "$schema_dir/schema.yaml" ]]; then
+                  SCHEMA_FILES+=("$schema_dir/schema.yaml")
+                  echo "Found schema file: $schema_dir/schema.yaml"
+                fi
+              else
+                echo "⚠️ Warning: Schema version directory not found: $schema_dir"
               fi
+            done
+
+            # Process config template versions from input or find all if not specified
+            if [[ -n "${{ github.event.inputs.solution_template_versions }}" ]]; then
+              echo "Using specified config template versions: ${{ github.event.inputs.solution_template_versions }}"
+              IFS=',' read -ra CONFIG_VERSIONS <<< "${{ github.event.inputs.solution_template_versions }}"
+            else
+              echo "No config template versions specified, finding all available versions"
+              CONFIG_VERSIONS=()
+              for config_dir in .pg/apps/common/config-templates/*/; do
+                if [[ -d "$config_dir" && "$(basename "$config_dir")" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                  CONFIG_VERSIONS+=("$(basename "$config_dir")")
+                fi
+              done
             fi
-          done
+
+            # Process each specified config template version
+            for version in "${CONFIG_VERSIONS[@]}"; do
+              version=$(echo "$version" | xargs)  # Trim whitespace
+              config_dir=".pg/apps/common/config-templates/$version"
+              if [[ -d "$config_dir" ]]; then
+                # Check for both naming patterns
+                if [[ -f "$config_dir/common-config-template.yaml" ]]; then
+                  CONFIG_FILES+=("$config_dir/common-config-template.yaml")
+                  echo "Found config template file: $config_dir/common-config-template.yaml"
+                elif [[ -f "$config_dir/config-template.yaml" ]]; then
+                  CONFIG_FILES+=("$config_dir/config-template.yaml")
+                  echo "Found config template file: $config_dir/config-template.yaml"
+                fi
+              else
+                echo "⚠️ Warning: Config template version directory not found: $config_dir"
+              fi
+            done
+          else
+            echo "Push/workflow_run event - processing only changed files"
+            
+            # Get changed files from the previous step
+            CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+            echo "Changed files: $CHANGED_FILES"
+            
+            # Process each changed file and extract only the ones that match our patterns
+            while IFS= read -r file; do
+              # Check for versioned schema files
+              if [[ "$file" =~ ^\.pg/apps/common/schemas/([0-9]+\.[0-9]+\.[0-9]+)/(.*\.yaml)$ ]]; then
+                version="${BASH_REMATCH[1]}"
+                filename="${BASH_REMATCH[2]}"
+                echo "Found changed schema file: $file (version: $version, filename: $filename)"
+                
+                # Verify the file exists and add it
+                if [[ -f "$file" ]]; then
+                  SCHEMA_FILES+=("$file")
+                  echo "Added schema file: $file"
+                else
+                  echo "⚠️ Warning: Changed schema file not found: $file"
+                fi
+              # Check for versioned config template files
+              elif [[ "$file" =~ ^\.pg/apps/common/config-templates/([0-9]+\.[0-9]+\.[0-9]+)/(.*\.yaml)$ ]]; then
+                version="${BASH_REMATCH[1]}"
+                filename="${BASH_REMATCH[2]}"
+                echo "Found changed config template file: $file (version: $version, filename: $filename)"
+                
+                # Verify the file exists and add it
+                if [[ -f "$file" ]]; then
+                  CONFIG_FILES+=("$file")
+                  echo "Added config template file: $file"
+                else
+                  echo "⚠️ Warning: Changed config template file not found: $file"
+                fi
+              fi
+            done <<< "$(echo "$CHANGED_FILES" | tr ' ' '\n')"
+            
+            # Log what we found
+            echo "Changed schema files found: ${#SCHEMA_FILES[@]}"
+            echo "Changed config template files found: ${#CONFIG_FILES[@]}"
+            
+            if [[ ${#SCHEMA_FILES[@]} -eq 0 && ${#CONFIG_FILES[@]} -eq 0 ]]; then
+              echo "No versioned common files changed - nothing to process"
+            fi
+          fi
 
           # Convert arrays to JSON
           SCHEMA_FILES_JSON=$(printf '%s\n' "${SCHEMA_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')

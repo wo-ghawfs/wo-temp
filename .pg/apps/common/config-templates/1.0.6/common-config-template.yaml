@@ -3,7 +3,7 @@ metadata:
   version: 1.0.6
 schema: 
   name: common-sch
-  version: 1.0.1
+  version: 1.0.1 
 configs:
   SqlServerEndpoint: http://localhost/SqlServerEndpoint
   LineHealthEndpoint: http://localhost/LineHealthEndpoint
