@@ -38,6 +38,7 @@ inputs:
   description:
     description: 'Description of the config template'
     required: false
+    default: 'Common configuration template for shared settings'
   # Batch processing inputs
   config-template-files:
     description: 'JSON array of config template file paths for batch processing'
@@ -72,9 +73,6 @@ runs:
         FAILED_TEMPLATES_DETAILS="[]"
         FILES_CREATED=false
         TOTAL_PROCESSED=0
-
-        # Read default description
-        DEFAULT_DESCRIPTION="Common configuration template for shared settings"
         
         # Determine processing mode and prepare file arrays
         if [[ "$PROCESSING_MODE" == "batch" ]]; then
@@ -259,7 +257,7 @@ runs:
                  --config-template-name "$TEMPLATE_NAME" \
                  --config-template-file "$template_file" \
                  --version "$TEMPLATE_VERSION" \
-                 --description "${{ inputs.description || DEFAULT_DESCRIPTION }}" \
+                 --description "${{ inputs.description }}" \
                  --output json 2>&1); then
               echo "   ❌ Failed to create config template: $TEMPLATE_NAME v$TEMPLATE_VERSION"
               FAILURE_REASON="Azure CLI creation failed"
