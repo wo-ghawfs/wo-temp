@@ -44,7 +44,7 @@ on:
         default: null
       solution_template_versions:
         type: string
-        description: 'Comma-separated list of template versions to process (e.g., 1.0.0,2.0.0)'
+        description: 'Comma-separated list of solution template versions to process (e.g., 1.0.0,2.0.0)'
         default: null
       usesiterg:
         type: string
@@ -1015,6 +1015,71 @@ jobs:
           else
             echo "✅ All schema validations passed successfully"
           fi
+
+  report-config-template-validation-errors:
+    needs: [update-wo-artifacts, update_common_artifacts, commit-generated-files]
+    if: always() && (needs.update-wo-artifacts.result != 'skipped' || needs.update_common_artifacts.result != 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download config template results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: config-template-results-*
+          path: config-template-results
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Process and report config template validation results
+        run: |
+          TOTAL_SKIPPED=0
+          TOTAL_FAILED=0
+          ALL_SKIPPED_DETAILS="[]"
+          ALL_FAILED_DETAILS="[]"
+          
+          echo "Processing config template results..."
+          
+          # Check if config-template-results directory exists and has files
+          if [[ -d "config-template-results" && $(ls -A config-template-results/ 2>/dev/null) ]]; then
+            # Process each result file
+            for result_file in config-template-results/*-results.json; do
+              if [[ -f "$result_file" ]]; then
+                echo "Processing: $result_file"
+                
+                SKIPPED=$(jq -r '.templates_skipped // "0"' "$result_file")
+                FAILED=$(jq -r '.templates_failed // "0"' "$result_file")
+                SKIPPED_DETAILS=$(jq -c '.skipped_templates_details // []' "$result_file")
+                FAILED_DETAILS=$(jq -c '.failed_templates_details // []' "$result_file")
+                
+                echo "  Skipped: $SKIPPED, Failed: $FAILED"
+                
+                # Add to totals
+                TOTAL_SKIPPED=$((TOTAL_SKIPPED + SKIPPED))
+                TOTAL_FAILED=$((TOTAL_FAILED + FAILED))
+                
+                # Merge details
+                if [[ "$SKIPPED_DETAILS" != "[]" ]]; then
+                  ALL_SKIPPED_DETAILS=$(echo "$ALL_SKIPPED_DETAILS" | jq --argjson new "$SKIPPED_DETAILS" '. + $new')
+                fi
+                
+                if [[ "$FAILED_DETAILS" != "[]" ]]; then
+                  ALL_FAILED_DETAILS=$(echo "$ALL_FAILED_DETAILS" | jq --argjson new "$FAILED_DETAILS" '. + $new')
+                fi
+              fi
+            done
+          else
+            echo "No config template results found - no validation was performed"
+            exit 0
+          fi
+
+      - name: Report Config Template Results
+        uses: ./.github/actions/wo-config-template-report
+        with:
+          templates-skipped: ${{ env.TOTAL_SKIPPED }}
+          templates-failed: ${{ env.TOTAL_FAILED }}
+          skipped-templates-details: ${{ env.ALL_SKIPPED_DETAILS }}
+          failed-templates-details: ${{ env.ALL_FAILED_DETAILS }}
 
   report-config-template-validation-errors:
     needs: [update-wo-artifacts, update_common_artifacts, commit-generated-files]
