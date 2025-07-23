@@ -38,6 +38,14 @@ on:
         type: string
         description: 'Comma-separated list of apps to update (e.g., testapp1,testapp2)'
         default: null
+      schema_versions:
+        type: string
+        description: 'Comma-separated list of schema versions to process (e.g., 1.0.0,2.0.0)'
+        default: null
+      solution_template_versions:
+        type: string
+        description: 'Comma-separated list of solution template versions to process (e.g., 1.0.0,2.0.0)'
+        default: null
       usesiterg:
         type: string
         description: 'RG OVERRIDE - Leave empty to use default from wo-common.yaml'
@@ -281,57 +289,90 @@ jobs:
           SPEC_FILES=()
           
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            # For manual runs, find ALL versioned files for the specified actions
+            # For manual runs, find specified versioned files for the specified actions
             case "${{ github.event.inputs.action }}" in
               "create-schema"|"all")
                 CREATE_SCHEMA="true"
-                # Find all versioned schema files
-                if [[ -d "$BASE_PATH/schemas" ]]; then
-                  for version_dir in "$BASE_PATH/schemas"/*/ ; do
-                    if [[ -d "$version_dir" && "$(basename "$version_dir")" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                      if [[ -f "$version_dir/${{ matrix.app_name }}-schema.yaml" ]]; then
-                        SCHEMA_FILES+=("$version_dir/${{ matrix.app_name }}-schema.yaml")
-                      elif [[ -f "$version_dir/schema.yaml" ]]; then
-                        SCHEMA_FILES+=("$version_dir/schema.yaml")
+                # Get schema versions from input or use all versions if not specified
+                if [[ -n "${{ github.event.inputs.schema_versions }}" ]]; then
+                  IFS=',' read -ra SCHEMA_VERSIONS <<< "${{ github.event.inputs.schema_versions }}"
+                else
+                  # Find all version directories if no specific versions provided
+                  if [[ -d "$BASE_PATH/schemas" ]]; then
+                    SCHEMA_VERSIONS=()
+                    for version_dir in "$BASE_PATH/schemas"/*/ ; do
+                      if [[ -d "$version_dir" && "$(basename "$version_dir")" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                        SCHEMA_VERSIONS+=("$(basename "$version_dir")")
                       fi
-                    fi
-                  done
+                    done
+                  fi
                 fi
+
+                # Process each schema version
+                for version in "${SCHEMA_VERSIONS[@]}"; do
+                  version_dir="$BASE_PATH/schemas/$version"
+                  if [[ -d "$version_dir" ]]; then
+                    if [[ -f "$version_dir/${{ matrix.app_name }}-schema.yaml" ]]; then
+                      SCHEMA_FILES+=("$version_dir/${{ matrix.app_name }}-schema.yaml")
+                    elif [[ -f "$version_dir/schema.yaml" ]]; then
+                      SCHEMA_FILES+=("$version_dir/schema.yaml")
+                    fi
+                  else
+                    echo "⚠️ Warning: Schema version directory not found: $version_dir"
+                  fi
+                done
                 ;;
             esac
+
             case "${{ github.event.inputs.action }}" in
               "create-soln-template"|"all")
                 CREATE_TEMPLATE="true"
-                # Find all versioned solution template files and their corresponding spec files
-                if [[ -d "$BASE_PATH/solution-templates" ]]; then
-                  for version_dir in "$BASE_PATH/solution-templates"/*/ ; do
-                    if [[ -d "$version_dir" && "$(basename "$version_dir")" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-                      # Find template file
-                      TEMPLATE_FILE=""
-                      if [[ -f "$version_dir/${{ matrix.app_name }}-sol-template.yaml" ]]; then
-                        TEMPLATE_FILE="$version_dir/${{ matrix.app_name }}-sol-template.yaml"
-                      elif [[ -f "$version_dir/sol-template.yaml" ]]; then
-                        TEMPLATE_FILE="$version_dir/sol-template.yaml"
+                # Get solution template versions from input or use all versions if not specified
+                if [[ -n "${{ github.event.inputs.solution_template_versions }}" ]]; then
+                  IFS=',' read -ra TEMPLATE_VERSIONS <<< "${{ github.event.inputs.solution_template_versions }}"
+                else
+                  # Find all version directories if no specific versions provided
+                  if [[ -d "$BASE_PATH/solution-templates" ]]; then
+                    TEMPLATE_VERSIONS=()
+                    for version_dir in "$BASE_PATH/solution-templates"/*/ ; do
+                      if [[ -d "$version_dir" && "$(basename "$version_dir")" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                        TEMPLATE_VERSIONS+=("$(basename "$version_dir")")
                       fi
-                      
-                      # Find corresponding spec file
-                      SPEC_FILE=""
-                      if [[ -f "$version_dir/${{ matrix.app_name }}-specs.json" ]]; then
-                        SPEC_FILE="$version_dir/${{ matrix.app_name }}-specs.json"
-                      elif [[ -f "$version_dir/specs.json" ]]; then
-                        SPEC_FILE="$version_dir/specs.json"
-                      fi
-                      
-                      # Only add if both files exist
-                      if [[ -n "$TEMPLATE_FILE" && -n "$SPEC_FILE" ]]; then
-                        TEMPLATE_FILES+=("$TEMPLATE_FILE")
-                        SPEC_FILES+=("$SPEC_FILE")
-                      elif [[ -n "$TEMPLATE_FILE" ]]; then
-                        echo "⚠️ Warning: Template file found but no spec file: $TEMPLATE_FILE"
-                      fi
-                    fi
-                  done
+                    done
+                  fi
                 fi
+
+                # Process each template version
+                for version in "${TEMPLATE_VERSIONS[@]}"; do
+                  version_dir="$BASE_PATH/solution-templates/$version"
+                  if [[ -d "$version_dir" ]]; then
+                    # Find template file
+                    TEMPLATE_FILE=""
+                    if [[ -f "$version_dir/${{ matrix.app_name }}-sol-template.yaml" ]]; then
+                      TEMPLATE_FILE="$version_dir/${{ matrix.app_name }}-sol-template.yaml"
+                    elif [[ -f "$version_dir/sol-template.yaml" ]]; then
+                      TEMPLATE_FILE="$version_dir/sol-template.yaml"
+                    fi
+                    
+                    # Find corresponding spec file
+                    SPEC_FILE=""
+                    if [[ -f "$version_dir/${{ matrix.app_name }}-specs.json" ]]; then
+                      SPEC_FILE="$version_dir/${{ matrix.app_name }}-specs.json"
+                    elif [[ -f "$version_dir/specs.json" ]]; then
+                      SPEC_FILE="$version_dir/specs.json"
+                    fi
+                    
+                    # Only add if both files exist
+                    if [[ -n "$TEMPLATE_FILE" && -n "$SPEC_FILE" ]]; then
+                      TEMPLATE_FILES+=("$TEMPLATE_FILE")
+                      SPEC_FILES+=("$SPEC_FILE")
+                    elif [[ -n "$TEMPLATE_FILE" ]]; then
+                      echo "⚠️ Warning: Template file found but no spec file: $TEMPLATE_FILE"
+                    fi
+                  else
+                    echo "⚠️ Warning: Template version directory not found: $version_dir"
+                  fi
+                done
                 ;;
             esac
           else

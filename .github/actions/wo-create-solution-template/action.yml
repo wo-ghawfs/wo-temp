@@ -185,6 +185,18 @@ runs:
             FAILURE_REASON="Invalid path format"
             FAILURE_DETAILS="Template file must be in a versioned directory (e.g., solution-templates/1.0.0/)"
             TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+            
+            # Add failure details
+            ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+            FAILED_ENTRY=$(jq -n \
+              --arg file "$ESCAPED_FILE" \
+              --arg name "$TEMPLATE_NAME" \
+              --arg version "unknown" \
+              --arg error "$FAILURE_REASON" \
+              --arg details "$FAILURE_DETAILS" \
+              '{file: $file, "template-name": $name, version: $version, error: $error, "error-details": $details}')
+            
+            FAILED_TEMPLATES_DETAILS=$(echo "$FAILED_TEMPLATES_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
             continue
           fi
           
@@ -210,6 +222,19 @@ runs:
             FAILURE_REASON="Version mismatch"
             FAILURE_DETAILS="File path version ($PATH_VERSION) does not match template version ($TEMPLATE_VERSION)"
             TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+            
+            # Add failure details
+            ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+            ESCAPED_TEMPLATE_NAME=$(echo "$TEMPLATE_NAME" | sed 's/"/\\"/g')
+            FAILED_ENTRY=$(jq -n \
+              --arg file "$ESCAPED_FILE" \
+              --arg name "$ESCAPED_TEMPLATE_NAME" \
+              --arg version "$TEMPLATE_VERSION" \
+              --arg error "$FAILURE_REASON" \
+              --arg details "$FAILURE_DETAILS" \
+              '{file: $file, "template-name": $name, version: $version, error: $error, "error-details": $details}')
+            
+            FAILED_TEMPLATES_DETAILS=$(echo "$FAILED_TEMPLATES_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
             continue
           fi
           
@@ -221,8 +246,18 @@ runs:
               echo "   Schema version: '$SCHEMA_VERSION'"
               FAILURE_REASON="Metadata parse error"
               FAILURE_DETAILS="Could not read template name, version, schema name, or schema version from file - check YAML format"
-              TEMPLATE_NAME="unknown"
-              TEMPLATE_VERSION="unknown"
+              
+              # Add failure details
+              ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+              FAILED_ENTRY=$(jq -n \
+                --arg file "$ESCAPED_FILE" \
+                --arg name "unknown" \
+                --arg version "unknown" \
+                --arg error "$FAILURE_REASON" \
+                --arg details "$FAILURE_DETAILS" \
+                '{file: $file, "template-name": $name, version: $version, error: $error, "error-details": $details}')
+              
+              FAILED_TEMPLATES_DETAILS=$(echo "$FAILED_TEMPLATES_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
               TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
             else
               echo "   Template: $TEMPLATE_NAME"
@@ -238,6 +273,20 @@ runs:
                 FAILURE_REASON="Schema does not exist"
                 FAILURE_DETAILS="Schema $SCHEMA_NAME v$SCHEMA_VERSION does not exist. Please ensure the schema and version exist before creating the solution template"
                 TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+                
+                # Add failure details
+                ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+                ESCAPED_TEMPLATE_NAME=$(echo "$TEMPLATE_NAME" | sed 's/"/\\"/g')
+                ESCAPED_TEMPLATE_VERSION=$(echo "$TEMPLATE_VERSION" | sed 's/"/\\"/g')
+                FAILED_ENTRY=$(jq -n \
+                  --arg file "$ESCAPED_FILE" \
+                  --arg name "$ESCAPED_TEMPLATE_NAME" \
+                  --arg version "$ESCAPED_TEMPLATE_VERSION" \
+                  --arg error "$FAILURE_REASON" \
+                  --arg details "$FAILURE_DETAILS" \
+                  '{file: $file, "template-name": $name, version: $version, error: $error, "error-details": $details}')
+                
+                FAILED_TEMPLATES_DETAILS=$(echo "$FAILED_TEMPLATES_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
                 continue
               fi
 
@@ -281,6 +330,21 @@ runs:
                 FAILURE_REASON="Azure CLI creation failed"
                 FAILURE_DETAILS="$AZ_RESPONSE"
                 TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+                
+                # Add failure details
+                ESCAPED_FILE=$(echo "$template_file" | sed 's/"/\\"/g')
+                ESCAPED_TEMPLATE_NAME=$(echo "$TEMPLATE_NAME" | sed 's/"/\\"/g')
+                ESCAPED_TEMPLATE_VERSION=$(echo "$TEMPLATE_VERSION" | sed 's/"/\\"/g')
+                ESCAPED_RESPONSE=$(echo "$AZ_RESPONSE" | sed 's/"/\\"/g' | tr '\n' ' ')
+                FAILED_ENTRY=$(jq -n \
+                  --arg file "$ESCAPED_FILE" \
+                  --arg name "$ESCAPED_TEMPLATE_NAME" \
+                  --arg version "$ESCAPED_TEMPLATE_VERSION" \
+                  --arg error "$FAILURE_REASON" \
+                  --arg details "$ESCAPED_RESPONSE" \
+                  '{file: $file, "template-name": $name, version: $version, error: $error, "error-details": $details}')
+                
+                FAILED_TEMPLATES_DETAILS=$(echo "$FAILED_TEMPLATES_DETAILS" | jq --argjson entry "$FAILED_ENTRY" '. + [$entry]')
                 continue
               fi
 
