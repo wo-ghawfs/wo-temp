@@ -754,7 +754,9 @@ jobs:
           echo "Processing validation results..."
           
           # Process schema results
-          if [[ -d "validation-results" && $(find validation-results -name "*-results.json" 2>/dev/null) ]]; then
+          if [[ -d "validation-results" ]]; then
+            # Check if any result files exist
+            if find validation-results -name "*-results.json" -print -quit 2>/dev/null | grep -q .; then
             
             # Process schema result files
             for result_file in validation-results/schema-results/*-results.json 2>/dev/null; do
@@ -809,8 +811,12 @@ jobs:
                 fi
               fi
             done
+            else
+              echo "No result files found in validation-results directory"
+              exit 0
+            fi
           else
-            echo "No validation results found - no validation was performed"
+            echo "No validation results directory found - no validation was performed"
             exit 0
           fi
           
