@@ -1,7 +1,7 @@
 metadata:
   name: common-config-temp
   version: 1.0.5
-schema:
+schema: 
   name: common-sch
   version: 1.0.1
 configs:
