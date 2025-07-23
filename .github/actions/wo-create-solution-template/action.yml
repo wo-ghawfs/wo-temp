@@ -239,7 +239,10 @@ runs:
                 FAILURE_DETAILS="Schema $SCHEMA_NAME v$SCHEMA_VERSION does not exist. Please ensure the schema and version exist before creating the solution template"
                 TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
                 continue
-              elif az workload-orchestration solution-template version show \
+              fi
+
+              # Check if template version already exists
+              if az workload-orchestration solution-template version show \
                     -g "${{ inputs.resource-group }}" \
                     --solution-template-name "$TEMPLATE_NAME" \
                     -v "$TEMPLATE_VERSION" >/dev/null 2>&1; then
@@ -259,55 +262,55 @@ runs:
                   '{file: $file, "template-name": $name, version: $version, reason: $reason}')
                 
                 SKIPPED_TEMPLATES_DETAILS=$(echo "$SKIPPED_TEMPLATES_DETAILS" | jq --argjson entry "$SKIPPED_ENTRY" '. + [$entry]')
-              else
-                echo "   Status: Creating new solution template..."
-                
-                # Create solution template - capture both stdout and stderr
-                if AZ_RESPONSE=$(az workload-orchestration solution-template create \
-                     -g "${{ inputs.resource-group }}" \
-                     -l "${{ inputs.location }}" \
-                     --capabilities "$TEMPLATE_CAPABILITIES" \
-                     --configuration-template-file "$template_file" \
-                     --specification "$spec_file" \
-                     --description "$TEMPLATE_DESCRIPTION" \
-                     --enable-external-validation "$TEMPLATE_ENABLE_VALIDATION" \
-                     --output json 2>&1); then
-                  
-                  echo "   ✅ Successfully created solution template: $TEMPLATE_NAME v$TEMPLATE_VERSION"
-                  TEMPLATES_CREATED=$((TEMPLATES_CREATED + 1))
-                  FILES_CREATED=true
-                  
-                  # Extract resource IDs
-                  SOLUTION_TEMPLATE_ID=$(echo "$AZ_RESPONSE" | jq -r '.properties.solutionTemplateId // empty')
-                  SOLUTION_TEMPLATE_VERSION_ID=$(echo "$AZ_RESPONSE" | jq -r '.properties.solutionTemplateVersionId // empty')
-                  
-                  # Create metadata file
-                  FOLDER_PATH=".pg/apps/${{ inputs.app-name }}/solutions"
-                  mkdir -p "$FOLDER_PATH"
-                  YAML_FILE="$FOLDER_PATH/$TEMPLATE_NAME.yaml"
-                  
-                  if [[ -f "$YAML_FILE" ]]; then
-                    # Check if version already exists in file
-                    EXISTING_VERSION=$(yq eval ".versions[] | select(.version == \"$TEMPLATE_VERSION\") | .version" "$YAML_FILE" 2>/dev/null || echo "")
-                    if [[ -z "$EXISTING_VERSION" ]]; then
-                      yq eval ".versions += [{\"version\": \"$TEMPLATE_VERSION\", \"solutionTemplateVersionId\": \"$SOLUTION_TEMPLATE_VERSION_ID\", \"revisions\": []}]" -i "$YAML_FILE"
-                    fi
-                  else
-                    # Create new file
-                    yq eval -n '.solutionTemplateName = "'"$TEMPLATE_NAME"'"' > "$YAML_FILE"
-                    yq eval '.solutionTemplateId = "'"$SOLUTION_TEMPLATE_ID"'"' -i "$YAML_FILE"
-                    yq eval '.versions = []' -i "$YAML_FILE"
-                    yq eval '.versions += [{"version": "'"$TEMPLATE_VERSION"'", "solutionTemplateVersionId": "'"$SOLUTION_TEMPLATE_VERSION_ID"'", "revisions": []}]' -i "$YAML_FILE"
-                  fi
-                else
-                  echo "   ❌ Failed to create solution template: $TEMPLATE_NAME v$TEMPLATE_VERSION"
-                  FAILURE_REASON="Azure CLI creation failed"
-                  FAILURE_DETAILS="$AZ_RESPONSE"
-                  TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+                continue
+              fi
+
+              echo "   Status: Creating new solution template..."
+              
+              # Create solution template - capture both stdout and stderr
+              if ! AZ_RESPONSE=$(az workload-orchestration solution-template create \
+                   -g "${{ inputs.resource-group }}" \
+                   -l "${{ inputs.location }}" \
+                   --capabilities "$TEMPLATE_CAPABILITIES" \
+                   --configuration-template-file "$template_file" \
+                   --specification "$spec_file" \
+                   --description "$TEMPLATE_DESCRIPTION" \
+                   --enable-external-validation "$TEMPLATE_ENABLE_VALIDATION" \
+                   --output json 2>&1); then
+                echo "   ❌ Failed to create solution template: $TEMPLATE_NAME v$TEMPLATE_VERSION"
+                FAILURE_REASON="Azure CLI creation failed"
+                FAILURE_DETAILS="$AZ_RESPONSE"
+                TEMPLATES_FAILED=$((TEMPLATES_FAILED + 1))
+                continue
+              fi
+
+              echo "   ✅ Successfully created solution template: $TEMPLATE_NAME v$TEMPLATE_VERSION"
+              TEMPLATES_CREATED=$((TEMPLATES_CREATED + 1))
+              FILES_CREATED=true
+              
+              # Extract resource IDs
+              SOLUTION_TEMPLATE_ID=$(echo "$AZ_RESPONSE" | jq -r '.properties.solutionTemplateId // empty')
+              SOLUTION_TEMPLATE_VERSION_ID=$(echo "$AZ_RESPONSE" | jq -r '.properties.solutionTemplateVersionId // empty')
+              
+              # Create metadata file
+              FOLDER_PATH=".pg/apps/${{ inputs.app-name }}/solutions"
+              mkdir -p "$FOLDER_PATH"
+              YAML_FILE="$FOLDER_PATH/$TEMPLATE_NAME.yaml"
+              
+              if [[ -f "$YAML_FILE" ]]; then
+                # Check if version already exists in file
+                EXISTING_VERSION=$(yq eval ".versions[] | select(.version == \"$TEMPLATE_VERSION\") | .version" "$YAML_FILE" 2>/dev/null || echo "")
+                if [[ -z "$EXISTING_VERSION" ]]; then
+                  yq eval ".versions += [{\"version\": \"$TEMPLATE_VERSION\", \"solutionTemplateVersionId\": \"$SOLUTION_TEMPLATE_VERSION_ID\", \"revisions\": []}]" -i "$YAML_FILE"
                 fi
+              else
+                # Create new file
+                yq eval -n '.solutionTemplateName = "'"$TEMPLATE_NAME"'"' > "$YAML_FILE"
+                yq eval '.solutionTemplateId = "'"$SOLUTION_TEMPLATE_ID"'"' -i "$YAML_FILE"
+                yq eval '.versions = []' -i "$YAML_FILE"
+                yq eval '.versions += [{"version": "'"$TEMPLATE_VERSION"'", "solutionTemplateVersionId": "'"$SOLUTION_TEMPLATE_VERSION_ID"'", "revisions": []}]' -i "$YAML_FILE"
               fi
             fi
-          fi
           
           # If there was a failure, add to failed templates details
           if [[ -n "$FAILURE_REASON" ]]; then
