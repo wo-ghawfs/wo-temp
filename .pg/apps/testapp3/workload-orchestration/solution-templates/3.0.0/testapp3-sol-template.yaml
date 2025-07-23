@@ -1,0 +1,14 @@
+metadata:
+  name: testapp3-config-temp
+  version: 2.0.0
+schema: 
+  name: testapp3-sch
+  version: 1.0.0
+configs:
+  AppName: ${{$val(AppName)}}
+  PrometheusPort: ${{$val(PrometheusPort)}}
+  AiMqBrokerAddress: ${{$val(AiMqBrokerAddress)}}
+  AiMqBrokerPort: ${{$val(AiMqBrokerPort)}}
+  DependencyConfigs: []
+  DeploymentName: ${{$val(DeploymentName)}}
+ 
