@@ -606,21 +606,47 @@ jobs:
       - name: Get files
         id: get-files
         run: |
-          # Verify schema file exists
-          SCHEMA_PATH=".pg/apps/common/common-schema.yaml"
-          if [[ -f "$SCHEMA_PATH" ]]; then
-            echo "schema_file=$SCHEMA_PATH" >> $GITHUB_OUTPUT
-          else
-            echo "::warning::Common schema file not found at $SCHEMA_PATH"
-          fi
-          
-          # Verify config template file exists
-          CONFIG_PATH=".pg/apps/common/common-config-template.yaml"
-          if [[ -f "$CONFIG_PATH" ]]; then
-            echo "config_file=$CONFIG_PATH" >> $GITHUB_OUTPUT
-          else
-            echo "::warning::Common config template file not found at $CONFIG_PATH"
-          fi
+          # Initialize arrays for schema and config template files
+          SCHEMA_FILES=()
+          CONFIG_FILES=()
+
+          # Find all versioned schema files
+          for schema_dir in .pg/apps/common/schemas/*/; do
+            if [[ -d "$schema_dir" ]]; then
+              version=$(basename "$schema_dir")
+              # Check for both naming patterns
+              if [[ -f "$schema_dir/common-schema.yaml" ]]; then
+                SCHEMA_FILES+=("$schema_dir/common-schema.yaml")
+              elif [[ -f "$schema_dir/schema.yaml" ]]; then
+                SCHEMA_FILES+=("$schema_dir/schema.yaml")
+              fi
+            fi
+          done
+
+          # Find all versioned config template files
+          for config_dir in .pg/apps/common/config-templates/*/; do
+            if [[ -d "$config_dir" ]]; then
+              version=$(basename "$config_dir")
+              # Check for both naming patterns
+              if [[ -f "$config_dir/common-config-template.yaml" ]]; then
+                CONFIG_FILES+=("$config_dir/common-config-template.yaml")
+              elif [[ -f "$config_dir/config-template.yaml" ]]; then
+                CONFIG_FILES+=("$config_dir/config-template.yaml")
+              fi
+            fi
+          done
+
+          # Convert arrays to JSON
+          SCHEMA_FILES_JSON=$(printf '%s\n' "${SCHEMA_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          CONFIG_FILES_JSON=$(printf '%s\n' "${CONFIG_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
+
+          # Set outputs
+          echo "schema_files=$SCHEMA_FILES_JSON" >> $GITHUB_OUTPUT
+          echo "config_files=$CONFIG_FILES_JSON" >> $GITHUB_OUTPUT
+
+          # Log findings
+          echo "Found schema files: $SCHEMA_FILES_JSON"
+          echo "Found config template files: $CONFIG_FILES_JSON"
         
       - name: Check changed files
         if: github.event_name == 'push' || github.event_name == 'workflow_run'
@@ -649,11 +675,16 @@ jobs:
                 ;;
             esac
           else
-            # For push events, check changed files
-            if [[ $(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -c ".pg/apps/common/common-schema.yaml") -gt 0 ]]; then
+            # For push events, check changed files in versioned directories
+            CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
+
+            # Check for schema changes in any version directory
+            if echo "$CHANGED_FILES" | grep -q ".pg/apps/common/schemas/[0-9]\+\.[0-9]\+\.[0-9]\+/.*\.yaml"; then
               UPDATE_COMMON_SCHEMA="true"
             fi
-            if [[ $(echo "${{ steps.changed-files.outputs.all_changed_files }}" | grep -c ".pg/apps/common/common-config-template.yaml") -gt 0 ]]; then
+
+            # Check for config template changes in any version directory
+            if echo "$CHANGED_FILES" | grep -q ".pg/apps/common/config-templates/[0-9]\+\.[0-9]\+\.[0-9]\+/.*\.yaml"; then
               UPDATE_COMMON_CONFIG="true"
             fi
           fi
@@ -670,19 +701,17 @@ jobs:
         uses: ./.github/actions/wo-create-schema
         with:
           app-name: common
-          azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
           resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
           location: ${{ env.AZURE_LOCATION }}
-          schema-file: ${{ steps.get-files.outputs.schema_file }}
+          schema-files: ${{ steps.get-files.outputs.schema_files }}
 
       - name: Create Common Config Template
         id: create-config
         if: steps.update-flags.outputs.update_config == 'true'
         uses: ./.github/actions/wo-create-config-template
         with:
-          azure-credentials: ${{ secrets.AZURE_CREDENTIALS }}
           resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
-          config-template-file: ${{ steps.get-files.outputs.config_file }}
+          config-template-files: ${{ steps.get-files.outputs.config_files }}
           description: "Common configuration template for shared settings"
           location: ${{ env.AZURE_LOCATION }}
 
