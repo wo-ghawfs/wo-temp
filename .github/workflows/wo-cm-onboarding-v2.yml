@@ -723,9 +723,9 @@ jobs:
             fi
           fi
 
-          # Convert arrays to JSON
-          SCHEMA_FILES_JSON=$(printf '%s\n' "${SCHEMA_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
-          CONFIG_FILES_JSON=$(printf '%s\n' "${CONFIG_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          # Convert arrays to JSON, filtering out empty strings
+          SCHEMA_FILES_JSON=$(printf '%s\n' "${SCHEMA_FILES[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          CONFIG_FILES_JSON=$(printf '%s\n' "${CONFIG_FILES[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
 
           # Set outputs
           echo "schema_files=$SCHEMA_FILES_JSON" >> $GITHUB_OUTPUT
@@ -784,6 +784,7 @@ jobs:
           echo "Set flags: schema=$UPDATE_COMMON_SCHEMA, template=$UPDATE_COMMON_CONFIG"
 
       - name: Create Common Schema
+        id: create-common-schemas
         if: steps.update-flags.outputs.update_schema == 'true'
         uses: ./.github/actions/wo-create-schema
         with:
@@ -791,6 +792,37 @@ jobs:
           resource-group: ${{ env.AZURE_RESOURCE_GROUP }}
           location: ${{ env.AZURE_LOCATION }}
           schema-files: ${{ steps.get-files.outputs.schema_files }}
+
+      - name: Store Common Schema Results
+        id: store-common-schema-results
+        if: steps.update-flags.outputs.update_schema == 'true'
+        run: |
+          # Store schema validation results as artifacts for aggregation
+          mkdir -p schema-results
+          
+          # Create a result file for common schemas
+          RESULT_FILE="schema-results/common-results.json"
+          
+          cat > "$RESULT_FILE" << EOF
+          {
+            "app_name": "common",
+            "schemas_skipped": "${{ steps.create-common-schemas.outputs.schemas-skipped || '0' }}",
+            "schemas_failed": "${{ steps.create-common-schemas.outputs.schemas-failed || '0' }}",
+            "skipped_schemas_details": ${{ steps.create-common-schemas.outputs.skipped-schemas-details || '[]' }},
+            "failed_schemas_details": ${{ steps.create-common-schemas.outputs.failed-schemas-details || '[]' }}
+          }
+          EOF
+          
+          echo "Common schema results:"
+          cat "$RESULT_FILE"
+
+      - name: Upload Common Schema Results
+        if: steps.update-flags.outputs.update_schema == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: schema-results-common
+          path: schema-results/
+          retention-days: 1
 
       - name: Create Common Config Template
         id: create-config
@@ -917,7 +949,7 @@ jobs:
     if: always() && needs.update-wo-artifacts.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
-      - name: Download schema results
+      - name: Download app schema results
         uses: actions/download-artifact@v4
         with:
           pattern: schema-results-*
@@ -925,20 +957,20 @@ jobs:
           merge-multiple: true
         continue-on-error: true
 
-      - name: Process and report schema validation results
+      - name: Process and report app schema validation results
         run: |
           TOTAL_SKIPPED=0
           TOTAL_FAILED=0
           ALL_SKIPPED_DETAILS="[]"
           ALL_FAILED_DETAILS="[]"
           
-          echo "Processing schema results..."
+          echo "Processing app schema results..."
           
           # Check if schema-results directory exists and has files
           if [[ -d "schema-results" && $(ls -A schema-results/ 2>/dev/null) ]]; then
-            # Process each result file
+            # Process each result file (excluding common)
             for result_file in schema-results/*-results.json; do
-              if [[ -f "$result_file" ]]; then
+              if [[ -f "$result_file" && ! "$result_file" =~ common-results\.json$ ]]; then
                 echo "Processing: $result_file"
                 
                 SKIPPED=$(jq -r '.schemas_skipped // "0"' "$result_file")
@@ -963,31 +995,31 @@ jobs:
               fi
             done
           else
-            echo "No schema results found - no schema validation was performed"
+            echo "No app schema results found - no app schema validation was performed"
             exit 0
           fi
           
           echo ""
-          echo "📊 Aggregated Results:"
-          echo "   Total schemas skipped: $TOTAL_SKIPPED"
-          echo "   Total schemas failed: $TOTAL_FAILED"
+          echo "📊 Aggregated App Schema Results:"
+          echo "   Total app schemas skipped: $TOTAL_SKIPPED"
+          echo "   Total app schemas failed: $TOTAL_FAILED"
           
           # Only report and fail if there are actually issues
           if [[ $TOTAL_SKIPPED -gt 0 || $TOTAL_FAILED -gt 0 ]]; then
             echo ""
-            echo "🚨 Schema Validation Issues Found:"
+            echo "🚨 App Schema Validation Issues Found:"
             echo ""
             
             if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
-              echo "⏭️  Skipped Schemas (Version Conflicts): $TOTAL_SKIPPED"
-              echo "The following schema versions were skipped because they already exist:"
+              echo "⏭️  Skipped App Schemas (Version Conflicts): $TOTAL_SKIPPED"
+              echo "The following app schema versions were skipped because they already exist:"
               echo "$ALL_SKIPPED_DETAILS" | jq -r '.[] | "   - \(.["schema-name"]) v\(.version) (\(.file))"'
               echo ""
             fi
             
             if [[ "$TOTAL_FAILED" -gt 0 ]]; then
-              echo "❌ Failed Schema Creations: $TOTAL_FAILED"
-              echo "The following schema creations failed:"
+              echo "❌ Failed App Schema Creations: $TOTAL_FAILED"
+              echo "The following app schema creations failed:"
               echo "$ALL_FAILED_DETAILS" | jq -r '.[] | "   - \(.["schema-name"]) v\(.version): \(.error) (\(.file))"'
               echo ""
               echo "🔍 Detailed Error Information:"
@@ -995,30 +1027,122 @@ jobs:
             fi
             
             echo "📝 Summary:"
-            echo "   Total schemas skipped: $TOTAL_SKIPPED"
-            echo "   Total schemas failed: $TOTAL_FAILED"
+            echo "   Total app schemas skipped: $TOTAL_SKIPPED"
+            echo "   Total app schemas failed: $TOTAL_FAILED"
             echo ""
             
             if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
-              echo "⚠️  Skipped schemas indicate version conflicts. Please create new versions for any changes to existing versioned files."
+              echo "⚠️  Skipped app schemas indicate version conflicts. Please create new versions for any changes to existing versioned files."
             fi
             
             if [[ "$TOTAL_FAILED" -gt 0 ]]; then
-              echo "❌ Failed schema creations require attention. Please review the errors above and fix the underlying issues."
+              echo "❌ Failed app schema creations require attention. Please review the errors above and fix the underlying issues."
               exit 1
             fi
             
             if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
-              echo "⚠️  The workflow completed successfully but some schemas were skipped due to version conflicts."
+              echo "⚠️  The workflow completed successfully but some app schemas were skipped due to version conflicts."
               exit 1
             fi
           else
-            echo "✅ All schema validations passed successfully"
+            echo "✅ All app schema validations passed successfully"
           fi
 
+  report-common-schema-validation-errors:
+    needs: [update_common_artifacts, commit-generated-files]
+    if: always() && needs.update_common_artifacts.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download common schema results
+        uses: actions/download-artifact@v4
+        with:
+          name: schema-results-common
+          path: schema-results
+        continue-on-error: true
+
+      - name: Process and report common schema validation results
+        run: |
+          TOTAL_SKIPPED=0
+          TOTAL_FAILED=0
+          ALL_SKIPPED_DETAILS="[]"
+          ALL_FAILED_DETAILS="[]"
+          
+          echo "Processing common schema results..."
+          
+          # Check if common schema results exist
+          if [[ -f "schema-results/common-results.json" ]]; then
+            echo "Processing: schema-results/common-results.json"
+            
+            SKIPPED=$(jq -r '.schemas_skipped // "0"' "schema-results/common-results.json")
+            FAILED=$(jq -r '.schemas_failed // "0"' "schema-results/common-results.json")
+            SKIPPED_DETAILS=$(jq -c '.skipped_schemas_details // []' "schema-results/common-results.json")
+            FAILED_DETAILS=$(jq -c '.failed_schemas_details // []' "schema-results/common-results.json")
+            
+            echo "  Skipped: $SKIPPED, Failed: $FAILED"
+            
+            # Set totals
+            TOTAL_SKIPPED=$SKIPPED
+            TOTAL_FAILED=$FAILED
+            ALL_SKIPPED_DETAILS=$SKIPPED_DETAILS
+            ALL_FAILED_DETAILS=$FAILED_DETAILS
+          else
+            echo "No common schema results found - no common schema validation was performed"
+            exit 0
+          fi
+          
+          echo ""
+          echo "📊 Common Schema Results:"
+          echo "   Total common schemas skipped: $TOTAL_SKIPPED"
+          echo "   Total common schemas failed: $TOTAL_FAILED"
+          
+          # Only report and fail if there are actually issues
+          if [[ $TOTAL_SKIPPED -gt 0 || $TOTAL_FAILED -gt 0 ]]; then
+            echo ""
+            echo "🚨 Common Schema Validation Issues Found:"
+            echo ""
+            
+            if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
+              echo "⏭️  Skipped Common Schemas (Version Conflicts): $TOTAL_SKIPPED"
+              echo "The following common schema versions were skipped because they already exist:"
+              echo "$ALL_SKIPPED_DETAILS" | jq -r '.[] | "   - \(.["schema-name"]) v\(.version) (\(.file))"'
+              echo ""
+            fi
+            
+            if [[ "$TOTAL_FAILED" -gt 0 ]]; then
+              echo "❌ Failed Common Schema Creations: $TOTAL_FAILED"
+              echo "The following common schema creations failed:"
+              echo "$ALL_FAILED_DETAILS" | jq -r '.[] | "   - \(.["schema-name"]) v\(.version): \(.error) (\(.file))"'
+              echo ""
+              echo "🔍 Detailed Error Information:"
+              echo "$ALL_FAILED_DETAILS" | jq -r '.[] | "   File: \(.file)\n   Schema: \(.["schema-name"]) v\(.version)\n   Error: \(.error)\n   Details: \(.["error-details"])\n"'
+            fi
+            
+            echo "📝 Summary:"
+            echo "   Total common schemas skipped: $TOTAL_SKIPPED"
+            echo "   Total common schemas failed: $TOTAL_FAILED"
+            echo ""
+            
+            if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
+              echo "⚠️  Skipped common schemas indicate version conflicts. Please create new versions for any changes to existing versioned files."
+            fi
+            
+            if [[ "$TOTAL_FAILED" -gt 0 ]]; then
+              echo "❌ Failed common schema creations require attention. Please review the errors above and fix the underlying issues."
+              exit 1
+            fi
+            
+            if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
+              echo "⚠️  The workflow completed successfully but some common schemas were skipped due to version conflicts."
+              exit 1
+            fi
+          else
+            echo "✅ All common schema validations passed successfully"
+          fi
+
+
   report-config-template-validation-errors:
-    needs: [update-wo-artifacts, update_common_artifacts, commit-generated-files]
-    if: always() && (needs.update-wo-artifacts.result != 'skipped' || needs.update_common_artifacts.result != 'skipped')
+    needs: [update_common_artifacts, commit-generated-files]
+    if: always() && needs.update_common_artifacts.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -1072,73 +1196,58 @@ jobs:
             echo "No config template results found - no validation was performed"
             exit 0
           fi
-
-      - name: Report Config Template Results
-        uses: ./.github/actions/wo-config-template-report
-        with:
-          templates-skipped: ${{ env.TOTAL_SKIPPED }}
-          templates-failed: ${{ env.TOTAL_FAILED }}
-          skipped-templates-details: ${{ env.ALL_SKIPPED_DETAILS }}
-          failed-templates-details: ${{ env.ALL_FAILED_DETAILS }}
-
-  report-config-template-validation-errors:
-    needs: [update-wo-artifacts, update_common_artifacts, commit-generated-files]
-    if: always() && (needs.update-wo-artifacts.result != 'skipped' || needs.update_common_artifacts.result != 'skipped')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download config template results
-        uses: actions/download-artifact@v4
-        with:
-          pattern: config-template-results-*
-          path: config-template-results
-          merge-multiple: true
-        continue-on-error: true
-
-      - name: Process and report config template validation results
-        run: |
-          TOTAL_SKIPPED=0
-          TOTAL_FAILED=0
-          ALL_SKIPPED_DETAILS="[]"
-          ALL_FAILED_DETAILS="[]"
           
-          echo "Processing config template results..."
+          echo ""
+          echo "📊 Aggregated Results:"
+          echo "   Total config templates skipped: $TOTAL_SKIPPED"
+          echo "   Total config templates failed: $TOTAL_FAILED"
           
-          # Check if config-template-results directory exists and has files
-          if [[ -d "config-template-results" && $(ls -A config-template-results/ 2>/dev/null) ]]; then
-            # Process each result file
-            for result_file in config-template-results/*-results.json; do
-              if [[ -f "$result_file" ]]; then
-                echo "Processing: $result_file"
-                
-                SKIPPED=$(jq -r '.templates_skipped // "0"' "$result_file")
-                FAILED=$(jq -r '.templates_failed // "0"' "$result_file")
-                SKIPPED_DETAILS=$(jq -c '.skipped_templates_details // []' "$result_file")
-                FAILED_DETAILS=$(jq -c '.failed_templates_details // []' "$result_file")
-                
-                echo "  Skipped: $SKIPPED, Failed: $FAILED"
-                
-                # Add to totals
-                TOTAL_SKIPPED=$((TOTAL_SKIPPED + SKIPPED))
-                TOTAL_FAILED=$((TOTAL_FAILED + FAILED))
-                
-                # Merge details
-                if [[ "$SKIPPED_DETAILS" != "[]" ]]; then
-                  ALL_SKIPPED_DETAILS=$(echo "$ALL_SKIPPED_DETAILS" | jq --argjson new "$SKIPPED_DETAILS" '. + $new')
-                fi
-                
-                if [[ "$FAILED_DETAILS" != "[]" ]]; then
-                  ALL_FAILED_DETAILS=$(echo "$ALL_FAILED_DETAILS" | jq --argjson new "$FAILED_DETAILS" '. + $new')
-                fi
-              fi
-            done
+          # Only report and fail if there are actually issues
+          if [[ $TOTAL_SKIPPED -gt 0 || $TOTAL_FAILED -gt 0 ]]; then
+            echo ""
+            echo "🚨 Config Template Validation Issues Found:"
+            echo ""
+            
+            if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
+              echo "⏭️  Skipped Config Templates (Version Conflicts): $TOTAL_SKIPPED"
+              echo "The following config template versions were skipped because they already exist:"
+              echo "$ALL_SKIPPED_DETAILS" | jq -r '.[] | "   - \(.["template-name"]) v\(.version) (\(.file))"'
+              echo ""
+            fi
+            
+            if [[ "$TOTAL_FAILED" -gt 0 ]]; then
+              echo "❌ Failed Config Template Creations: $TOTAL_FAILED"
+              echo "The following config template creations failed:"
+              echo "$ALL_FAILED_DETAILS" | jq -r '.[] | "   - \(.["template-name"]) v\(.version): \(.error) (\(.file))"'
+              echo ""
+              echo "🔍 Detailed Error Information:"
+              echo "$ALL_FAILED_DETAILS" | jq -r '.[] | "   File: \(.file)\n   Template: \(.["template-name"]) v\(.version)\n   Error: \(.error)\n   Details: \(.["error-details"])\n"'
+            fi
+            
+            echo "📝 Summary:"
+            echo "   Total config templates skipped: $TOTAL_SKIPPED"
+            echo "   Total config templates failed: $TOTAL_FAILED"
+            echo ""
+            
+            if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
+              echo "⚠️  Skipped config templates indicate version conflicts. Please create new versions for any changes to existing versioned files."
+            fi
+            
+            if [[ "$TOTAL_FAILED" -gt 0 ]]; then
+              echo "❌ Failed config template creations require attention. Please review the errors above and fix the underlying issues."
+              exit 1
+            fi
+            
+            if [[ "$TOTAL_SKIPPED" -gt 0 ]]; then
+              echo "⚠️  The workflow completed successfully but some config templates were skipped due to version conflicts."
+              exit 1
+            fi
           else
-            echo "No config template results found - no validation was performed"
-            exit 0
+            echo "✅ All config template validations passed successfully"
           fi
 
-      - name: Report Config Template Results
+      - name: Report Config Template Results (Legacy)
+        if: false  # Disabled in favor of inline reporting above
         uses: ./.github/actions/wo-config-template-report
         with:
           templates-skipped: ${{ env.TOTAL_SKIPPED }}
