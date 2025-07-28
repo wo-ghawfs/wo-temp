@@ -1,0 +1,16 @@
+{
+  "components": [
+    {
+      "name": "helmcomponent",
+      "type": "helm.v3",
+      "properties": {
+        "chart": {
+          "repo": "ghcr.io/eclipse-symphony/tests/helm/simple-chart",
+          "version": "1.0.1",
+          "wait": true,
+          "timeout": "5m"
+        }
+      }
+    }
+  ]
+}
