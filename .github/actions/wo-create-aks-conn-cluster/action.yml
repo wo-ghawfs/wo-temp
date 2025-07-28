@@ -26,7 +26,8 @@ runs:
 
         akscls="false"
         echo "check if cluster already exists "
-        aksName=$(az aks show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" --subscription "${{ steps.siteinfo.outputs.subId }}" --query name -o tsv 2>&1) || true
+        aksName=$(az aks show --resource-group "${{ steps.siteinfo.outputs.rg }}" --name "${{ steps.siteinfo.outputs.siteClsName }}" \
+                              --subscription "${{ steps.siteinfo.outputs.subId }}" --query name -o tsv 2>&1) || true
         echo "aksName is : $aksName"
 
         if [[ "$aksName" == "${{ steps.siteinfo.outputs.siteClsName }}" ]]; then
@@ -42,8 +43,9 @@ runs:
       shell: bash
       run: |
         echo "CREATE AKS CLUSTER IDENTITY"
-        az identity create --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsId }} 
-        echo "clusterIdentity=$(az identity show --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsId }} --query id --output tsv)" >> $GITHUB_OUTPUT
+        az identity create --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsId }} --subscription ${{ steps.siteinfo.outputs.subId }}
+        echo "clusterIdentity=$(az identity show --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsId }} \
+                                                 --subscription ${{ steps.siteinfo.outputs.subId }} --query id --output tsv)" >> $GITHUB_OUTPUT
 
     - name: Create AKS cluster
       if: ${{ steps.checkaks.outputs.akscls == 'false' }}
@@ -53,7 +55,8 @@ runs:
         echo " "
         echo "CREATE AKS CLUSTER "
         az aks create --resource-group ${{ steps.siteinfo.outputs.rg }} --location ${{ steps.siteinfo.outputs.siteLoc }}  \
-                      --name ${{ steps.siteinfo.outputs.siteClsName }} --node-count 2 --node-vm-size Standard_D2s_v5 --assign-identity ${{ steps.clsid.outputs.clusterIdentity }} --generate-ssh-keys
+                      --name ${{ steps.siteinfo.outputs.siteClsName }} --node-count 2 --node-vm-size Standard_D2s_v5 \
+                      --assign-identity ${{ steps.clsid.outputs.clusterIdentity }} --generate-ssh-keys --subscription ${{ steps.siteinfo.outputs.subId }}
 
     - name: Get AKS Credentials
       if: ${{ steps.checkaks.outputs.akscls == 'false' }}
@@ -70,9 +73,12 @@ runs:
         echo " "
         echo "ARC-CONNECTED AKS CLUSTER "
         kubectl config current-context
-        az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --overwrite-existing
+        az aks get-credentials --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} \
+                               --subscription ${{ steps.siteinfo.outputs.subId }} --overwrite-existing
         kubectl config use-context ${{ steps.siteinfo.outputs.siteClsName }}
-        az connectedk8s connect --resource-group ${{ steps.siteinfo.outputs.rg }} --location "${{ steps.siteinfo.outputs.siteLoc }}" --name ${{ steps.siteinfo.outputs.siteClsName }}
-        az connectedk8s enable-features --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} --features cluster-connect custom-locations
+        az connectedk8s connect --resource-group ${{ steps.siteinfo.outputs.rg }} --location "${{ steps.siteinfo.outputs.siteLoc }}" \
+                                --subscription ${{ steps.siteinfo.outputs.subId }} --name ${{ steps.siteinfo.outputs.siteClsName }}
+        az connectedk8s enable-features --resource-group ${{ steps.siteinfo.outputs.rg }} --name ${{ steps.siteinfo.outputs.siteClsName }} \
+                                        --subscription ${{ steps.siteinfo.outputs.subId }} --features cluster-connect custom-locations
         echo
         echo "arc connected aks cluster successfully created"
