@@ -75,7 +75,7 @@ jobs:
             cd ../../solution-templates
             mkdir $updVer
             cd $updVer
-            cp ../*-solution-template.yaml .
+            cp ../*-sol-template.yaml .
             yq -i '.metadata.version = env(updVer)' *-template.yaml
             
             # update specs
