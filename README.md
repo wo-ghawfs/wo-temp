@@ -205,14 +205,14 @@ graph TD
     C --> E[workload-orchestration/]
     
     subgraph Required Files
-        D --> F[*schema.yaml]
-        D --> G[*-solTemp.yaml]
-        D --> H[*specs.json]
-        D --> I[solTemp-metadata.yaml]
-        E --> J[*schema.yaml]
-        E --> K[*-solTemp.yaml]
-        E --> L[*specs.json]
-        E --> M[solTemp-metadata.yaml]
+        D --> F[*-schema.yaml]
+        D --> G[*-sol-template.yaml]
+        D --> H[*-specs.json]
+        D --> I[metadata.yaml]
+        E --> J[*-schema.yaml]
+        E --> K[*-sol-template.yaml]
+        E --> L[*-specs.json]
+        E --> M[metadata.yaml]
     end
 ```
 
@@ -220,10 +220,10 @@ graph TD
 
 Each application under the `.pg` directory requires these files in its `workload-orchestration` directory:
 
-1. `*schema.yaml`: Defines the schema for workload orchestration
-2. `*-solTemp.yaml`: Contains the solution template configuration
-3. `*specs.json`: Specifies the deployment specifications
-4. `solTemp-metadata.yaml`: Contains metadata like capabilities and external validation settings
+1. `*-schema.yaml`: Defines the schema for workload orchestration
+2. `*-sol-template.yaml`: Contains the solution template configuration
+3. `*-specs.json`: Specifies the deployment specifications
+4. `metadata.yaml`: Contains metadata like capabilities and external validation settings
 
 Note: The `*` in filenames represents any prefix specific to your app.
 
@@ -302,10 +302,10 @@ For each app to update:
 1. **Get Files**:
    - Locates required files in app's workload-orchestration directory
    - Required patterns:
-     * `*schema.yaml` - Schema definition
-     * `*-solTemp.yaml` - Solution template
+     * `*-schema.yaml` - Schema definition
+     * `*-sol-template.yaml` - Solution template
      * `*specs.json` - Specifications
-     * `solTemp-metadata.yaml` - Metadata and capabilities
+     * `metadata.yaml` - Metadata and capabilities
 
 2. **Schema Creation**:
    ```yaml
@@ -346,7 +346,7 @@ For each app to update:
 1. **File Organization**:
    - Keep all workload orchestration files in `.pg/<app>/workload-orchestration/` directory
    - Use consistent naming patterns
-   - Maintain solTemp-metadata.yaml with current capabilities
+   - Maintain metadata.yaml with current capabilities
 
 2. **Version Management**:
    - Always update schema version before updating solution template version
