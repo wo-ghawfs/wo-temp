@@ -417,9 +417,9 @@ jobs:
           fi
           
           # Convert arrays to JSON
-          SCHEMA_FILES_JSON=$(printf '%s\n' "${SCHEMA_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
-          TEMPLATE_FILES_JSON=$(printf '%s\n' "${TEMPLATE_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
-          SPEC_FILES_JSON=$(printf '%s\n' "${SPEC_FILES[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          SCHEMA_FILES_JSON=$(printf '%s\n' "${SCHEMA_FILES[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          TEMPLATE_FILES_JSON=$(printf '%s\n' "${TEMPLATE_FILES[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          SPEC_FILES_JSON=$(printf '%s\n' "${SPEC_FILES[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
           
           # Set outputs
           echo "create_schema=$CREATE_SCHEMA" >> $GITHUB_OUTPUT
