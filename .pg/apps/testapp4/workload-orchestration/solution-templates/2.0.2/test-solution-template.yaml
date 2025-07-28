@@ -1,0 +1,15 @@
+metadata:
+  name: testapp4-solution
+  version: 2.0.2
+schema:
+  name: testapp4-schema
+  version: 1.0.0
+configs:
+  AppName: TESTSOLUTION
+  ErrorThreshold: ${{$val(ErrorThreshold)}}
+  HealthCheckEndpoint: ${{$val(HealthCheckEndpoint)}}
+  EnableLocalLog: ${{$val(EnableLocalLog)}}
+  AgentEndpoint: ${{$val(AgentEndpoint)}}
+  HealthCheckEnabled: ${{$val(HealthCheckEnabled)}}
+  ApplicationEndpoint: ${{$val(ApplicationEndpoint)}}
+  TemperatureRangeMax: ${{$val(TemperatureRangeMax)}}
