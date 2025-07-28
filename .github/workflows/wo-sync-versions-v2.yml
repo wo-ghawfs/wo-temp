@@ -79,7 +79,7 @@ jobs:
             yq -i '.metadata.version = env(updVer)' *-template.yaml
             
             # update specs
-            cp ../*-specs.yaml .
+            cp ../*-specs.json .
             yq -i '.components[].properties.chart.version = env(updVer)' *-specs.json
 
             cd $baseDir
