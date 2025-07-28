@@ -312,10 +312,10 @@ jobs:
                 for version in "${SCHEMA_VERSIONS[@]}"; do
                   version_dir="$BASE_PATH/schemas/$version"
                   if [[ -d "$version_dir" ]]; then
-                    if [[ -f "$version_dir/${{ matrix.app_name }}-schema.yaml" ]]; then
-                      SCHEMA_FILES+=("$version_dir/${{ matrix.app_name }}-schema.yaml")
-                    elif [[ -f "$version_dir/schema.yaml" ]]; then
-                      SCHEMA_FILES+=("$version_dir/schema.yaml")
+                    # Find any schema file matching *-schema.yaml pattern
+                    SCHEMA_FILE=$(find "$version_dir" -name "*-schema.yaml" -type f)
+                    if [[ -f "$SCHEMA_FILE" ]]; then
+                      SCHEMA_FILES+=("$SCHEMA_FILE")
                     fi
                   else
                     echo "⚠️ Warning: Schema version directory not found: $version_dir"
@@ -346,27 +346,17 @@ jobs:
                 for version in "${TEMPLATE_VERSIONS[@]}"; do
                   version_dir="$BASE_PATH/solution-templates/$version"
                   if [[ -d "$version_dir" ]]; then
-                    # Find template file
-                    TEMPLATE_FILE=""
-                    if [[ -f "$version_dir/${{ matrix.app_name }}-sol-template.yaml" ]]; then
-                      TEMPLATE_FILE="$version_dir/${{ matrix.app_name }}-sol-template.yaml"
-                    elif [[ -f "$version_dir/sol-template.yaml" ]]; then
-                      TEMPLATE_FILE="$version_dir/sol-template.yaml"
-                    fi
+                    # Find any solution template file matching *-sol-template.yaml pattern
+                    TEMPLATE_FILE=$(find "$version_dir" -name "*-sol-template.yaml" -type f)
                     
-                    # Find corresponding spec file
-                    SPEC_FILE=""
-                    if [[ -f "$version_dir/${{ matrix.app_name }}-specs.json" ]]; then
-                      SPEC_FILE="$version_dir/${{ matrix.app_name }}-specs.json"
-                    elif [[ -f "$version_dir/specs.json" ]]; then
-                      SPEC_FILE="$version_dir/specs.json"
-                    fi
+                    # Find any specs file matching *-specs.json pattern
+                    SPEC_FILE=$(find "$version_dir" -name "*-specs.json" -type f)
                     
                     # Only add if both files exist
-                    if [[ -n "$TEMPLATE_FILE" && -n "$SPEC_FILE" ]]; then
+                    if [[ -f "$TEMPLATE_FILE" && -f "$SPEC_FILE" ]]; then
                       TEMPLATE_FILES+=("$TEMPLATE_FILE")
                       SPEC_FILES+=("$SPEC_FILE")
-                    elif [[ -n "$TEMPLATE_FILE" ]]; then
+                    elif [[ -f "$TEMPLATE_FILE" ]]; then
                       echo "⚠️ Warning: Template file found but no spec file: $TEMPLATE_FILE"
                     fi
                   else
@@ -390,10 +380,11 @@ jobs:
                 
                 # Add versioned schema files
                 for version in $SCHEMA_VERSIONS; do
-                  if [[ -f "$BASE_PATH/schemas/$version/${{ matrix.app_name }}-schema.yaml" ]]; then
-                    SCHEMA_FILES+=("$BASE_PATH/schemas/$version/${{ matrix.app_name }}-schema.yaml")
-                  elif [[ -f "$BASE_PATH/schemas/$version/schema.yaml" ]]; then
-                    SCHEMA_FILES+=("$BASE_PATH/schemas/$version/schema.yaml")
+                  version_dir="$BASE_PATH/schemas/$version"
+                  # Find any schema file matching *-schema.yaml pattern
+                  SCHEMA_FILE=$(find "$version_dir" -name "*-schema.yaml" -type f)
+                  if [[ -f "$SCHEMA_FILE" ]]; then
+                    SCHEMA_FILES+=("$SCHEMA_FILE")
                   fi
                 done
               fi
@@ -406,27 +397,18 @@ jobs:
                 
                 # Add versioned solution template files and their spec files
                 for version in $TEMPLATE_VERSIONS; do
-                  # Find template file
-                  TEMPLATE_FILE=""
-                  if [[ -f "$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-sol-template.yaml" ]]; then
-                    TEMPLATE_FILE="$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-sol-template.yaml"
-                  elif [[ -f "$BASE_PATH/solution-templates/$version/sol-template.yaml" ]]; then
-                    TEMPLATE_FILE="$BASE_PATH/solution-templates/$version/sol-template.yaml"
-                  fi
+                  version_dir="$BASE_PATH/solution-templates/$version"
+                  # Find any solution template file matching *-sol-template.yaml pattern
+                  TEMPLATE_FILE=$(find "$version_dir" -name "*-sol-template.yaml" -type f)
                   
-                  # Find corresponding spec file
-                  SPEC_FILE=""
-                  if [[ -f "$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-specs.json" ]]; then
-                    SPEC_FILE="$BASE_PATH/solution-templates/$version/${{ matrix.app_name }}-specs.json"
-                  elif [[ -f "$BASE_PATH/solution-templates/$version/specs.json" ]]; then
-                    SPEC_FILE="$BASE_PATH/solution-templates/$version/specs.json"
-                  fi
+                  # Find any specs file matching *-specs.json pattern
+                  SPEC_FILE=$(find "$version_dir" -name "*-specs.json" -type f)
                   
                   # Only add if both files exist
-                  if [[ -n "$TEMPLATE_FILE" && -n "$SPEC_FILE" ]]; then
+                  if [[ -f "$TEMPLATE_FILE" && -f "$SPEC_FILE" ]]; then
                     TEMPLATE_FILES+=("$TEMPLATE_FILE")
                     SPEC_FILES+=("$SPEC_FILE")
-                  elif [[ -n "$TEMPLATE_FILE" ]]; then
+                  elif [[ -f "$TEMPLATE_FILE" ]]; then
                     echo "⚠️ Warning: Template file found but no spec file: $TEMPLATE_FILE"
                   fi
                 done
@@ -632,13 +614,11 @@ jobs:
               version=$(echo "$version" | xargs)  # Trim whitespace
               schema_dir=".pg/apps/common/schemas/$version"
               if [[ -d "$schema_dir" ]]; then
-                # Check for both naming patterns
-                if [[ -f "$schema_dir/common-schema.yaml" ]]; then
-                  SCHEMA_FILES+=("$schema_dir/common-schema.yaml")
-                  echo "Found schema file: $schema_dir/common-schema.yaml"
-                elif [[ -f "$schema_dir/schema.yaml" ]]; then
-                  SCHEMA_FILES+=("$schema_dir/schema.yaml")
-                  echo "Found schema file: $schema_dir/schema.yaml"
+                # Find any schema file matching *-schema.yaml pattern
+                SCHEMA_FILE=$(find "$schema_dir" -name "*-schema.yaml" -type f)
+                if [[ -f "$SCHEMA_FILE" ]]; then
+                  SCHEMA_FILES+=("$SCHEMA_FILE")
+                  echo "Found schema file: $SCHEMA_FILE"
                 fi
               else
                 echo "⚠️ Warning: Schema version directory not found: $schema_dir"
