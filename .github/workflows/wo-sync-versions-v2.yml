@@ -66,15 +66,15 @@ jobs:
 
             # update schema (create version dir if needed)
             cd ../workload-orchestration/schemas
-            mkdir updVer
-            cd updVer
+            mkdir $updVer
+            cd $updVer
             cp ../*-schema.yaml .
             yq -i '.metadata.version = env(updVer)' *-schema.yaml
         
             # update solution template (create version fir if required)
             cd ../../solution-templates
-            mkdir updVer
-            cd updVer
+            mkdir $updVer
+            cd $updVer
             cp ../*-solution-template.yaml .
             yq -i '.metadata.version = env(updVer)' *-template.yaml
             
