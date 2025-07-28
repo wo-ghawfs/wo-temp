@@ -8,7 +8,7 @@ on:
       - '.pg/**/workload-orchestration/**'
       - '.pg/apps/common/**'
   workflow_run:
-      workflows: ["WO-SYNC-VERSIONS"]
+      workflows: ["WO-SYNC-VERSIONS-V2"]
       types:
         - completed
 
