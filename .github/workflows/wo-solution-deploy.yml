@@ -378,11 +378,9 @@ jobs:
             matched_target=$(grep '^Target:' "$f" | awk -F': ' '{print $2}')
             echo "Target: $matched_target"
 
-            # extract RG
+            # extract RG of target
             ## targetId=$(grep '^targetId:' "$f" | awk -F': ' '{print $2}')
-            ## rg=$(echo "$targetId" | sed -E 's#.*/resourceGroups/([^/]+).*#\1#')
-            rg=${{ steps.getsiteinfo.outputs.rg }}
-            echo "rg=$rg" >> $GITHUB_OUTPUT
+            rg=$(echo "$targetId" | sed -E 's#.*/resourceGroups/([^/]+).*#\1#')
 
 
             # Get all the configurations
@@ -407,6 +405,9 @@ jobs:
 
           # cd to fileDir
           cd ${{ steps.process-deployment.outputs.fileDir }}
+
+          # extract RG of solution
+          rg=${{ steps.getsiteinfo.outputs.rg }}
 
           echo "Publish & Deploy Solutions"
           echo "-------------------------- "
