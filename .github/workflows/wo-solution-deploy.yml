@@ -447,7 +447,9 @@ jobs:
             cat matched_targetIds.json
             echo " "
 
-            rg=${{ steps.configure.outputs.rg }}
+            rg=${{ steps.getsiteinfo.outputs.rg }}
+            echo "Publish and Deploy RG: $rg"
+            echo "  "
 
             # publish solution
             if [ -z "$matched_targets" ]; then
