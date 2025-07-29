@@ -380,8 +380,10 @@ jobs:
 
             # extract RG of target
             targetId=$(grep '^targetId:' "$f" | awk -F': ' '{print $2}')
+            echo "Target: $targetId"
             rg=$(echo "$targetId" | sed -E 's#.*/resourceGroups/([^/]+).*#\1#')
-
+            echo "Target RG: $rg"
+            echo ""
 
             # Get all the configurations
             ## echo "Config:"
