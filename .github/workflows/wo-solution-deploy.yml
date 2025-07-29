@@ -379,7 +379,7 @@ jobs:
             echo "Target: $matched_target"
 
             # extract RG of target
-            ## targetId=$(grep '^targetId:' "$f" | awk -F': ' '{print $2}')
+            targetId=$(grep '^targetId:' "$f" | awk -F': ' '{print $2}')
             rg=$(echo "$targetId" | sed -E 's#.*/resourceGroups/([^/]+).*#\1#')
 
 
