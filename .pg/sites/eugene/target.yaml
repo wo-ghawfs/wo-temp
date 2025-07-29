@@ -1,31 +1,31 @@
 target:
   eugene:
-  # - name: "eug-ct-1"
-  #   level: "country"
-  #   caps: ["azure-soap","azure-shampoo"]
-  #   scope: "wotxpga"
-  #   spec: "targetspecs.json"
+    - name: "eug-ft-1"
+      level: "factory"
+      caps:
+        - azure-soap
+        - azure-shampoo
+      scope: "wotxpga"
+      spec: "targetspecs.json"
+      # system updated
+      targetId: "/subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/wf-rg-eugene/providers/Microsoft.edge/targets/eug-ft-1"
 
-  # - name: "eug-rg-1"
-  #   level: "region"
-  #   caps: ["azure-soap","azure-shampoo"]
-  #   scope: "wotxpga"
-  #   spec: "targetspecs.json"
+    - name: "eug-li-1"
+      level: "line"
+      caps:
+        - azure-soap
+        - azure-shampoo
+      scope: "wotxpga"
+      spec: "targetspecs.json"
+      # system updated
+      targetId: "/subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/wf-rg-eugene/providers/Microsoft.edge/targets/eug-li-1"
 
-  - name: "eug-ft-1"
-    level: "factory"
-    caps: ["azure-soap","azure-shampoo"]
-    scope: "wotxpga"
-    spec: "targetspecs.json"
-
-  - name: "eug-li-1"
-    level: "line"
-    caps: ["azure-soap","azure-shampoo"]
-    scope: "wotxpga"
-    spec: "targetspecs.json"
-
-  - name: "eug-li-2"
-    level: "line"
-    caps: ["azure-soap","azure-shampoo"]
-    scope: "wotxpga"
-    spec: "targetspecs.json"
+    - name: "eug-li-2"
+      level: "line"
+      caps:
+        - azure-soap
+        - azure-shampoo
+      scope: "wotxpga"
+      spec: "targetspecs.json"
+      #system updated
+      targetId: "/subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/wf-rg-eugene/providers/Microsoft.edge/targets/eug-li-2"
