@@ -137,8 +137,8 @@ jobs:
             fi
           done
 
-          # Convert validated apps to JSON array
-          APPS=$(printf '%s\n' "${VALID_APPS[@]}" | jq -R -s -c 'split("\n")[:-1]')
+          # Convert validated apps to JSON array, filtering out any empty strings
+          APPS=$(printf '%s\n' "${VALID_APPS[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "apps=$APPS" >> $GITHUB_OUTPUT
           echo "✅ Final app list: $APPS"
 
