@@ -139,7 +139,8 @@ jobs:
 
             # Get solution capabilities
             ## mapfile -t solutionCapabilities < <(yq -r '.versions[] | select(.version == "'"$version"'") | .caps[]' "$solutionversions")
-            solutionCapabilities=$(az workload-orchestration solution-template show --ids $solutionTemplateVersionId --query properties.capabilities | yq -p=json '.[]' | xargs)
+            ## solutionCapabilities=$(az workload-orchestration solution-template show --ids $solutionTemplateVersionId --query properties.capabilities | yq -p=json '.[]' | xargs)
+            mapfile -t solutionCapabilities < <(az workload-orchestration solution-template show --ids "$solutionTemplateVersionId" --query properties.capabilities | yq -p=json '.[]')
 
             # Get solutionVersionId for this revision (may be blank)
             ## solutionVersionId=$(yq eval '.versions[].revisions[] | select(.name == "'"$revision"'") | .solutionVersionId' "$solutionversions")
@@ -177,7 +178,8 @@ jobs:
                 #extract caps
                 ## mapfile -t targetCapabilities < <(yq -r '.target.'"$site"'[] | select(.name == "'"$target"'") | .caps[]' ../../../sites/$site/target.yaml)
                 tarId=$(echo $targetId | tr -d '"') ## strip out double quotes
-                targetCapabilities=$(az workload-orchestration target show --ids $tarId --query properties.capabilities | yq -p=json '.[]' | xargs)
+                ## targetCapabilities=$(az workload-orchestration target show --ids $tarId --query properties.capabilities | yq -p=json '.[]' | xargs)
+                mapfile -t targetCapabilities < <(az workload-orchestration target show --ids "$solutionTemplateVersionId" --query properties.capabilities | yq -p=json '.[]')
               
                 echo "  >>> Processing:"
                 echo "      Site:     $site"
