@@ -1,0 +1,480 @@
+name: WO-SOLUTION-DEPLOY
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - '.pg/apps/**/**/deployments.yaml'
+
+permissions:
+  id-token: write # for actions
+  contents: write # for actions/checkout
+
+jobs:
+  process-commits:
+    runs-on: ubuntu-latest
+    outputs:
+      all_changed_files: ${{ steps.changed-files-json.outputs.all_changed_files }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 2
+
+      - name: Install yq
+        uses: mikefarah/yq@3.3.0
+
+      - name: Check for new deployments 
+        if: github.event_name == 'push' || github.event_name == 'workflow_run'
+        id: changed-files
+        uses: ./.github/actions/wo-changed-files
+        with:
+          files: .pg/apps/*
+
+      - name: Process deployment files
+        id: changed-files-json
+        run: |
+          changed_files=$(echo "${{ steps.changed-files.outputs.all_changed_files }}" | xargs)
+          json="["
+          for f in $changed_files; do
+            json="$json\"$f\","
+          done
+          json="${json%,}]"
+          echo "all_changed_files=$json" >> $GITHUB_OUTPUT
+
+          if [[ "$json" == "[]" ]]; then
+            echo " "
+            echo "  >>> No new deployments. Skipping further processing. End of run!"
+            echo " "
+            echo "  --- ooooooo --- "
+          fi
+
+  configure-publish-deploy:
+    runs-on: ubuntu-latest
+    needs: process-commits
+    if: ${{ needs.process-commits.outputs.all_changed_files != '[]' }}
+    strategy:
+      fail-fast: false
+      max-parallel: 3  
+      matrix:
+        changed_file: ${{ fromJson(needs.process-commits.outputs.all_changed_files) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 2
+
+      - name: Setup Azure
+        id: azsetup
+        uses: ./.github/actions/wo-azure-setup
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          azcliversion: "2.73.0"
+
+      - name: Install WO extensions
+        id: wo-cli-extn
+        uses: ./.github/actions/wo-install-wo-extension
+
+      - name: Install yq
+        uses: mikefarah/yq@3.3.0
+
+      - name: Check changed files
+        if: github.event_name == 'push' || github.event_name == 'workflow_run'
+        id: changed-files
+        uses: ./.github/actions/wo-changed-files
+        with:
+          files: .pg/apps/**/**/deployments.yaml
+
+      - name: Process deployment requests
+        id: process-deployment
+        run: |
+          set -euo pipefail
+
+          # Process deployment files
+          file="${{ matrix.changed_file }}"
+
+          fileDir=$(dirname "$file")
+          fileName=$(basename "$file")
+
+          # save fileDir for processing
+          echo "fileDir=$fileDir" >> $GITHUB_OUTPUT
+
+          cd $fileDir
+
+          basefile="defaultbaseconfig.yaml"
+          targetconfig="solution-target-configs.yaml"
+          deployments="deployments.yaml"
+
+          # Robust yq_merge function for v3/v4+
+          yq_merge() {
+            yq_version=$(yq --version 2>&1)
+            if echo "$yq_version" | grep -q 'version 3'; then
+              yq m -x "$1" "$2"
+            else
+              yq eval-all 'select(fi == 0) * select(fi == 1)' "$1" "$2"
+            fi
+          }
+
+          mkdir -p rendered
+
+          # Extract deployments info - read per line
+          while read -r line || [[ -n "$line" ]]; do
+            solution=$(echo "$line" | awk '{print $1}')
+            version=$(echo "$line" | awk '{print $2}')
+            targets_grp=$(echo "$line" | grep -oP '\{[^}]*\}' | tr -d '[]')
+
+            # Get solutionTemplateName (top level, always present)
+            solutionversions="$solution.yaml"
+            solutionTemplateName=$(yq eval '.solutionTemplateName' "$solutionversions")
+
+            # Get solutionTemplateVersionId 
+            solutionTemplateVersionId=$(yq eval '.versions[] | select(.version == "'"$version"'") | .solutionTemplateVersionId' "$solutionversions") 
+
+            # Get solution capabilities
+            ## mapfile -t solutionCapabilities < <(yq -r '.versions[] | select(.version == "'"$version"'") | .caps[]' "$solutionversions")
+            solutionCapabilities=$(az workload-orchestration solution-template show --ids $solutionTemplateVersionId --query properties.capabilities | yq -p=json '.[]' | xargs)
+
+            # Get solutionVersionId for this revision (may be blank)
+            ## solutionVersionId=$(yq eval '.versions[].revisions[] | select(.name == "'"$revision"'") | .solutionVersionId' "$solutionversions")
+            ## solutionVersionId=${solutionVersionId:-}
+
+            # Process targets per site group
+            for group in $targets_grp; do
+              # Remove braces and trim spaces
+              group=$(echo "$group" | sed 's/^{\s*//;s/\s*}$//;s/^ *//;s/ *$//')
+              site="${group%%:*}"
+              targets="${group#*:}"
+
+              # If targets is '*', extract all targets for the site from the solution-site-targets YAML
+              if [[ "$targets" == "*" ]]; then
+                # Use yq to get all targetNames for the site
+                targets=$(yq '.solution-templates[].versions[].sites[] | select(.siteName == "'"$site"'") | .targets[].targetName' "$targetconfig" | paste -sd "," -)
+              fi
+ 
+              # debug
+              echo "  >>>> Deployment:  Solution: $solution  Version: $version Site: $site TargetsConsidered: ${targets[@]}"
+
+              # initialize matching_target_ids
+              matching_target_ids=()
+              matching_tgt_names=()
+
+              # Loop through targets
+              IFS=',' read -ra tarr <<< "$targets"
+              for target in "${tarr[@]}"; do
+                target=$(echo "$target" | xargs) # trim whitespace
+                echo " "
+
+                #extract targetId
+                targetId=$(yq -r ../../../sites/$site/target.yaml | awk "/name: \"$target\"/,/targetId:/" | grep targetId | awk '{print $2}')
+
+                #extract caps
+                ## mapfile -t targetCapabilities < <(yq -r '.target.'"$site"'[] | select(.name == "'"$target"'") | .caps[]' ../../../sites/$site/target.yaml)
+                tarId=$(echo $targetId | tr -d '"') ## strip out double quotes
+                targetCapabilities=$(az workload-orchestration target show --ids $tarId --query properties.capabilities | yq -p=json '.[]' | xargs)
+              
+                echo "  >>> Processing:"
+                echo "      Site:     $site"
+                echo "      Target:   $target"
+                echo "      TargetId: $targetId"
+                echo "      solutionCaps: ${solutionCapabilities[@]}"
+                echo "      targetCaps:   ${targetCapabilities[@]}"
+                echo " "
+  
+                # override=$(yq e ".solution-template.versions[] | select(.version == "$version") | .targets[\"$target\"].override // {}" "$targetconfig" -o=yaml)
+                expr='.solution-templates[].versions[] | select(.version == "'"$version"'") | .sites[] | select(.siteName == "'"$site"'") | .targets[] | select(.targetName == "'"$target"'") | .override // {}'
+                override=$(yq e "$expr" "$targetconfig" -o=yaml)
+
+                outpath="rendered/rendered-${solution}-${version}-${site}-${target}.yaml"
+                targetpath="rendered/target-${solution}-${version}-${site}.yaml"
+
+                if [[ -z "$override" || "$override" == "{}" ]]; then
+                  cp "$basefile" config.tmp.yaml
+                else
+                  echo "$override" > override.yaml
+                  yq_merge "$basefile" override.yaml > config.tmp.yaml
+                fi
+
+                all_match=true
+                for sol_cap in "${solutionCapabilities[@]}"; do
+                  found=false
+                  for tgt_cap in "${targetCapabilities[@]}"; do
+                    if [[ "$sol_cap" == "$tgt_cap" ]]; then
+                      found=true
+                      break
+                    fi
+                  done
+                  if ! $found; then
+                    all_match=false
+                    break
+                  fi
+                done
+
+                if $all_match; then
+                  matching_target_ids+=("$targetId")
+                  matching_tgt_names+=("$target")
+
+                  # Prepend solutionTemplateName and solutionVersionId to the config
+                  {
+                    echo "Solution: ${solution}"
+                    echo "Version: ${version}"
+                    ## echo "Revision: ${revision}"
+                    echo "solutionTemplateName: ${solutionTemplateName}"
+                    echo "solutionTemplateVersionId: ${solutionTemplateVersionId}"
+                    ## echo "solutionVersionId: ${solutionVersionId}"
+                    echo "Site: ${site}"
+                    echo "Target: ${target}"
+                    echo "targetId: ${targetId}"
+                    echo "solutionCapabilities: ${solutionCapabilities[@]}"
+                    echo "targetCapabilities: ${targetCapabilities[@]}"
+                    echo "Matched Capabilities: $all_match"
+                    echo "config:"
+                    # Indent config.tmp.yaml by two spaces for proper YAML nesting
+                    sed 's/^/  /' config.tmp.yaml
+                    # cat config.tmp.yaml
+                  } > "$outpath"
+
+                else
+                  # debug
+                  echo " --- $target did not match capabilities"
+                  echo ""
+                fi
+
+              done  ## --- looping targets[@] 
+            
+              # Convert matching ids to a json format
+              json="["
+              sep=""
+              for id in "${matching_target_ids[@]}"; do
+                # Remove leading and trailing double quotes from the id, if any
+                id_clean=$(echo "$id" | sed -e 's/^"//' -e 's/"$//')
+                json="${json}${sep}{\"targetId\":\"${id_clean}\"}"
+                sep=","
+              done
+              json+="]"
+
+            
+              # Prepend solutionTemplateName and solutionVersionId to the config
+              {
+                echo "Solution: ${solution}"
+                echo "Version: ${version}"
+                echo "solutionTemplateName: ${solutionTemplateName}"
+                echo "solutionTemplateVersionId: ${solutionTemplateVersionId}"
+                ## echo "solutionVersionId: ${solutionVersionId}"
+                echo "Site: ${site}"
+                echo "Matched Capabilities: $all_match"
+                echo "Matched Targets:"
+                echo "   ${matching_tgt_names[@]}"
+                echo "Matched TargetIds:"
+                echo "   $json"
+              } > "$targetpath"
+            
+              # debug
+              echo "Debug: Matched TargetIds"
+              echo "$json"
+
+              # reset matching target_ids
+              matching_target_ids=()
+              matching_tgt_names=()
+              json=""
+
+            done  ## for loop for site:targets
+
+          done < "$deployments"  ## while loop for processing deployments.yaml
+
+
+      - name: Infocheck rendered configs
+        id: showconfigs
+        run: |
+          
+          # change dir
+          cd ${{ steps.process-deployment.outputs.fileDir }}
+
+          ## for f in .pg/apps/testapp3/sitesolution/rendered/rendered*.yaml; do
+          for f in rendered/rendered*.yaml; do
+            matched=$(grep '^Matched Capabilities:' "$f" | awk -F': ' '{print $2}')
+            if [ "$matched" == "true" ]; then
+              echo "Content: $f:"
+              cat "$f"
+              echo ""
+            fi
+          done
+
+          ## for f in .pg/apps/testapp3/sitesolution/rendered/target*.yaml; do
+          for f in rendered/target*.yaml; do
+            # Get solutionTemplateName and Version
+            solution_template_name=$(grep '^solutionTemplateName:' "$f" | awk -F': ' '{print $2}')
+            echo "SolutionTemplateName: $solution_template_name"
+
+            solution_version=$(grep '^Version:' "$f" | awk -F': ' '{print $2}')
+            echo "Solution Version: $solution_version"
+
+            site=$(grep '^Site:' "$f" | awk -F': ' '{print $2}')
+            echo "site=$site" >> $GITHUB_OUTPUT
+            echo "Site: $site"
+
+            # Get matching_target names to pass in for configuration set
+            matched_targets=$(awk '/^Matched Targets:/ {getline; print}' $f)
+            # Remove any leading/trailing whitespace
+            matched_targets=$(echo "$matched_targets" | xargs)
+            echo "Matched targets:"
+            echo "$matched_targets"
+
+            # Get matching_targetIds
+            matched_targetIds=$(awk '/^Matched TargetIds:/ {getline; print}' $f)
+
+            # Remove any leading/trailing whitespace
+            matched_targetIds=$(echo "$matched_targetIds" | xargs)
+
+            # Save to a JSON file (ensure it is valid JSON)
+            echo "$matched_targetIds" > matched_targetIds.json
+
+            echo "Matched targetIds:"
+            # Display the file
+            cat matched_targetIds.json
+            echo " "
+          done;
+
+      - name: Source site info
+        id: getsiteinfo
+        if: ${{ github.event.inputs.sites != 'none' }}
+        uses: ./.github/actions/wo-get-site-info
+        with:
+          site: ${{ steps.showconfigs.outputs.site }}
+          rg: false
+
+      - name: Configure Solution
+        id: configure
+        shell: bash
+        run: |
+
+          # cd to fileDir
+          cd ${{ steps.process-deployment.outputs.fileDir }}
+
+          echo "Configure Solutions for targets"
+          echo "------------------------------- "
+          echo " "
+          ## for f in .pg/apps/testapp3/sitesolution/rendered/rendered*.yaml; do
+          for f in rendered/rendered*.yaml; do
+
+            # Get solutionTemplateName and Version
+            solution_template_name=$(grep '^solutionTemplateName:' "$f" | awk -F': ' '{print $2}')
+            echo "SolutionTemplateName: $solution_template_name"
+
+            solution_version=$(grep '^Version:' "$f" | awk -F': ' '{print $2}')
+            echo "Solution Version: $solution_version"
+
+            site=$(grep '^Site:' "$f" | awk -F': ' '{print $2}')
+            echo "Site: $site"
+
+            matched_target=$(grep '^Target:' "$f" | awk -F': ' '{print $2}')
+            echo "Target: $matched_target"
+
+            # extract RG
+            ## targetId=$(grep '^targetId:' "$f" | awk -F': ' '{print $2}')
+            ## rg=$(echo "$targetId" | sed -E 's#.*/resourceGroups/([^/]+).*#\1#')
+            rg=${{ steps.getsiteinfo.outputs.rg }}
+            echo "rg=$rg" >> $GITHUB_OUTPUT
+
+
+            # Get all the configurations
+            ## echo "Config:"
+            configyaml=$(awk '/^config:/ {flag=1; next} flag && /^[^[:space:]]/ {flag=0} flag {sub(/^  /,""); print}' $f)
+            printf "%s\n" "$configyaml" > config.yaml
+            ## cat config.yaml  # To display the contents
+            echo ""
+
+            # configure solution for matching targets
+            echo " "
+            echo " >>> Configure solution: $solution_template_name for target  $matched_target "
+            az workload-orchestration configuration set -g $rg --solution-template-name "$solution_template_name" --target-name "$matched_target" --file config.yaml
+            echo " --- oxo --- "
+            echo " "
+          done
+          echo "----- ooooooo -----"
+
+      - name: Publish & Deploy Solution
+        shell: bash
+        run: |
+
+          # cd to fileDir
+          cd ${{ steps.process-deployment.outputs.fileDir }}
+
+          echo "Publish & Deploy Solutions"
+          echo "-------------------------- "
+          echo " "
+
+          ## for f in .pg/apps/testapp3/sitesolution/rendered/target*.yaml; do
+          for f in rendered/target*.yaml; do
+
+            # Get solutionTemplateName and Version
+            solution_template_name=$(grep '^solutionTemplateName:' "$f" | awk -F': ' '{print $2}')
+            echo "SolutionTemplateName: $solution_template_name"
+
+            solution_version=$(grep '^Version:' "$f" | awk -F': ' '{print $2}')
+            echo "Solution Version: $solution_version"
+
+
+            # Get matching_target names to pass in for configuration set
+            matched_targets=$(awk '/^Matched Targets:/ {getline; print}' $f)
+            # Remove any leading/trailing whitespace
+            matched_targets=$(echo "$matched_targets" | xargs)
+            echo "Matched targets:"
+            echo "$matched_targets"
+
+            # Get matching_targetIds
+            matched_targetIds=$(awk '/^Matched TargetIds:/ {getline; print}' $f)
+
+            # Remove any leading/trailing whitespace
+            matched_targetIds=$(echo "$matched_targetIds" | xargs)
+
+            # Save to a JSON file (ensure it is valid JSON)
+            echo "$matched_targetIds" > matched_targetIds.json
+
+            echo "Matched targetIds:"
+            # Display the file
+            cat matched_targetIds.json
+            echo " "
+
+            rg=${{ steps.configure.outputs.rg }}
+
+            # publish solution
+            if [ -z "$matched_targets" ]; then
+              echo "Publish skipped - no matching targets"
+            else
+              echo "  >>> Publishing solution: $solution_template_name  version  $solution_version"
+              blkpub=$(az workload-orchestration solution-template bulk-publish -g $rg --solution-template-name $solution_template_name --solution-template-version $solution_version --targets "@matched_targetIds.json")
+
+              echo "Publish Results: "
+              echo $blkpub
+              echo " "
+
+              # Parse out publishedTargets from output and deploy if list is not empty
+              echo "$blkpub" | yq -o=json '.properties.publishedTargets' > publishedTargets.json
+              #yq -o=json '.properties.publishedTargets' $blkpub > publishedTargets.json
+
+              echo "PublishedTargets:"
+              cat publishedTargets.json
+
+              ## echo "inline delete targetIds from output of publishedTargets"
+              yq -i 'map(del(.targetId))' publishedTargets.json
+              ## cat publishedTargets.json
+
+              echo " "
+              if [ "$(yq 'length' publishedTargets.json)" -gt 0 ]; then
+                echo " >>> Deploying solutions to publishedTargets"
+                az workload-orchestration solution-template bulk-deploy -g $rg --solution-template-name $solution_template_name --solution-template-version $solution_version --targets "@publishedTargets.json"
+                echo " --- oxo ---"
+                echo " "
+              else
+                echo "No deployments. publishedTargets is empty"
+              fi
+            fi
+            echo "--- ooooooo --- "
+          done

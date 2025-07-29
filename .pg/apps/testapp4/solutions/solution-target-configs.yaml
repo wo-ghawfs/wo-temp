@@ -1,0 +1,18 @@
+solution-templates:
+  - solutionTemplateName: "testapp4-solution"
+    baseconfig: "defaultbaseconfig.json"
+    versions:
+      - version: 0.3.0
+        instanceName: "testapp4-inst-030"
+        sites:
+          - siteName: "eugene"
+            targets:
+              - targetName: "eug-li-1"
+                override:
+                  ErrorThreshold: 0301
+                  TemperatureRangeMax: "03011"
+
+              - targetName: "eug-li-2"
+                override:
+                  ErrorThreshold: 0302
+                  TemperatureRangeMax: "03022"
