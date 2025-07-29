@@ -179,7 +179,7 @@ jobs:
                 ## mapfile -t targetCapabilities < <(yq -r '.target.'"$site"'[] | select(.name == "'"$target"'") | .caps[]' ../../../sites/$site/target.yaml)
                 tarId=$(echo $targetId | tr -d '"') ## strip out double quotes
                 ## targetCapabilities=$(az workload-orchestration target show --ids $tarId --query properties.capabilities | yq -p=json '.[]' | xargs)
-                mapfile -t targetCapabilities < <(az workload-orchestration target show --ids "$solutionTemplateVersionId" --query properties.capabilities | yq -p=json '.[]')
+                mapfile -t targetCapabilities < <(az workload-orchestration target show --ids $tarId --query properties.capabilities | yq -p=json '.[]')
               
                 echo "  >>> Processing:"
                 echo "      Site:     $site"
