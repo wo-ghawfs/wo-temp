@@ -16,3 +16,10 @@ solution-templates:
                 override:
                   ErrorThreshold: 0302
                   TemperatureRangeMax: "03022"
+          - siteName: "denver"
+            targets:
+              - targetName: "den-li-1"
+                override:
+                  ErrorThreshold: 600
+                  TemperatureRangeMax: "60011"
+
