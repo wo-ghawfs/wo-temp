@@ -1,0 +1,47 @@
+name: Create WO  contexts, hierarchies and capabilities
+description: Setup contexts, hierarchies and capabilities per config
+inputs:
+  site:
+    description: Site name, e.g., austin, boston, etc.
+    required: true
+  rg:
+    description: resource group to use
+    required: true
+runs:
+  using: "composite"
+  steps:
+  - name: source site info
+    id: siteinfo
+    uses: ./.github/actions/wo-get-site-info
+    with:
+      site: ${{ inputs.site }}
+      rg: ${{ inputs.rg }}
+
+  - name: create context
+    id: create-context
+    shell: bash
+    run: |
+
+      levels=${{ steps.siteinfo.outputs.levels }}
+      levelyaml=$(echo "$levels" | awk -F, '{for(i=1;i<=NF;i++) print "- name: " $i "\n  description: level " $i}')
+      leveljson=$(echo "$levelyaml" | yq -o=json)
+      echo "levels:"
+      echo $leveljson
+      echo " "
+      
+      capabilities=${{ steps.siteinfo.outputs.capabilities }}
+      capsyaml=$(echo "$capabilities" | awk -F, '{for(i=1;i<=NF;i++) print "- name: " $i "\n  description: " $i}')
+      capsjson=$(echo "$capsyaml" | yq -o=json)
+      echo "caps:"
+      echo $capsjson
+
+      echo " >>> creating context ..."
+      # temp: skip for hometenant-singlecontext
+      if [[ "${{ steps.siteinfo.outputs.ctxTenant }}" != "72f988bf-86f1-41af-91ab-2d7cd011db47" ]]; then
+        az workload-orchestration context create --subscription "${{ steps.siteinfo.outputs.ctxSub }}" --resource-group "${{ steps.siteinfo.outputs.ctxRG }}" \
+                                                 --location "${{ steps.siteinfo.outputs.ctxLoc }}" --name "${{ steps.siteinfo.outputs.ctxName }}" \
+                                                 --hierarchies '$leveljson' --capabilities '$capsjson'
+      fi 
+
+      echo " "
+      echo " >>> Context ${{ steps.siteinfo.outputs.ctxName }} created"
