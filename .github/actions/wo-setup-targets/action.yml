@@ -54,7 +54,7 @@ runs:
         target_scope=$(yq ".target.${{ inputs.site }}[$i].scope" .pg/sites/${{ inputs.site }}/target.yaml)
         # target_caps=$(yq '.target.${{ inputs.site }}[$i].caps[]' .pg/sites/${{ inputs.site }}/target.yaml | sort -u | xargs)
         mapfile -t target_caps < <(yq '.target.${{ inputs.site }}[$i].caps[]' .pg/sites/${{ inputs.site }}/target.yaml)
-        echo "Target capabilities: $target_caps[@]"
+        echo "Target capabilities: ${target_caps[@]}"
 
         #Additional action for each target
         echo "Deploying target $target_name"
@@ -74,7 +74,7 @@ runs:
         # Create target
         echo ">>> creating target ..."
         az workload-orchestration target create --resource-group $wfrg --location $wfloc --name $target_name --display-name "$target_name" \
-                                 --hierarchy-level "$target_level" --capabilities "$target_caps" --description "$target_name-$target_level" \
+                                 --hierarchy-level "$target_level" --capabilities "${target_caps[@]}" --description "$target_name-$target_level" \
                                  --solution-scope "$wfrg" --target-specification '@.pg/sites/${{ inputs.site }}/targetspecs.json' \
                                  --extended-location '@.pg/sites/${{ inputs.site }}/custom-location.json' \
                                  --context-id "/subscriptions/${{ steps.siteinfo.outputs.ctxSub }}/resourceGroups/${{ steps.siteinfo.outputs.ctxRG }}/providers/Microsoft.Edge/contexts/${{ steps.siteinfo.outputs.ctxName }}"
@@ -94,6 +94,11 @@ runs:
 
         # give time for previous op to complete
         sleep 30
+
+        # update target.yaml to store targetId
+        yq -i ".target.${{ inputs.site }}[$i].targetId = \"$targetId\"" .pg/sites/${{ inputs.site }}/target.yaml
+
+        echo "targetId=$targetId" >> $GITHUB_OUTPUT
 
         if [[ "$target_level" == "line" ]]; then
           # Set line level parent to factory level 
@@ -119,3 +124,11 @@ runs:
 
       echo
       echo "$numTar targets created."
+
+  - name: get latest changes
+    run: |
+      git pull origin main
+
+  - name: update targetIds
+    # Commit all changed files back to the repository
+    uses: stefanzweifel/git-auto-commit-action@v5
