@@ -54,7 +54,7 @@ runs:
         target_scope=$(yq ".target.${{ inputs.site }}[$i].scope" .pg/sites/${{ inputs.site }}/target.yaml)
         # target_caps=$(yq '.target.${{ inputs.site }}[$i].caps[]' .pg/sites/${{ inputs.site }}/target.yaml | sort -u | xargs)
         target_caps=()
-        mapfile -t target_caps < <(yq '.target.${{ inputs.site }}[$i].caps[]' .pg/sites/${{ inputs.site }}/target.yaml)
+        mapfile -t target_caps < <(yq '.target.${{ inputs.site }}[$i].caps[]' .pg/sites/${{ inputs.site }}/target.yaml | sort -u)
         echo "Target capabilities: ${target_caps[@]}"
 
         #Additional action for each target
