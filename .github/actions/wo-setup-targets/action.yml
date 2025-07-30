@@ -126,6 +126,7 @@ runs:
       echo "$numTar targets created."
 
   - name: get latest changes
+    shell: bash
     run: |
       git pull origin main
 
