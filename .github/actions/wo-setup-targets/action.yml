@@ -48,10 +48,12 @@ runs:
       for ((i=0; i<numTar; i++)); do
 
         target_name=$(yq ".target.${{ inputs.site }}[$i].name" .pg/sites/${{ inputs.site }}/target.yaml)
-        target_caps=$(yq ".target.${{ inputs.site }}[$i].caps" .pg/sites/${{ inputs.site }}/target.yaml)
+        # target_caps=$(yq ".target.${{ inputs.site }}[$i].caps" .pg/sites/${{ inputs.site }}/target.yaml)
         target_spec=$(yq ".target.${{ inputs.site }}[$i].spec" .pg/sites/${{ inputs.site }}/target.yaml)
         target_level=$(yq ".target.${{ inputs.site }}[$i].level" .pg/sites/${{ inputs.site }}/target.yaml)
         target_scope=$(yq ".target.${{ inputs.site }}[$i].scope" .pg/sites/${{ inputs.site }}/target.yaml)
+        target_caps=$(yq '.target.${{ inputs.site }}[$i].caps[]' .pg/sites/${{ inputs.site }}/target.yaml | sort -u | xargs)
+        echo "$target_caps"
 
         #Additional action for each target
         echo "Deploying target $target_name"
