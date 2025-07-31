@@ -471,13 +471,14 @@ jobs:
           # Merge and deduplicate app names using derived affected apps
           MERGED_APPS=$(echo "$ORIGINAL_APPS $AFFECTED_APPS" | jq -s 'add | unique | map(select(length > 0))')
           
-          # Compact JSON
+          # Compact JSON for both outputs
+          MERGED_APPS_COMPACT=$(echo "$MERGED_APPS" | jq -c .)
           MERGED_APP_CHANGES_COMPACT=$(echo "$MERGED_APP_CHANGES" | jq -c .)
           
-          echo "merged_apps=$MERGED_APPS" >> $GITHUB_OUTPUT
+          echo "merged_apps=$MERGED_APPS_COMPACT" >> $GITHUB_OUTPUT
           echo "merged_app_changes=$MERGED_APP_CHANGES_COMPACT" >> $GITHUB_OUTPUT
           
-          echo "Final merged apps: $MERGED_APPS"
+          echo "Final merged apps: $MERGED_APPS_COMPACT"
           echo "Final merged changes:"
           echo "$MERGED_APP_CHANGES" | jq .
 
