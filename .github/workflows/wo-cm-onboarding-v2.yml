@@ -252,6 +252,10 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       folders_created: ${{ steps.create-folders.outputs.folders_created }}
+      files_updated: ${{ steps.create-folders.outputs.files_updated }}
+      affected_apps: ${{ steps.create-folders.outputs.affected_apps }}
+      merged_apps: ${{ steps.merge-apps.outputs.merged_apps }}
+      merged_app_changes: ${{ steps.merge-apps.outputs.merged_app_changes }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -270,6 +274,9 @@ jobs:
           
           ROOT_TEMPLATE_CHANGES='${{ needs.detect-apps-resources-to-update.outputs.root_template_changes }}'
           FOLDERS_CREATED="false"
+          FILES_UPDATED="false"
+          AFFECTED_APPS="[]"
+          PROCESSED_VERSIONS="{}"
           
           echo "Processing root template changes..."
           echo "$ROOT_TEMPLATE_CHANGES" | jq .
@@ -340,6 +347,7 @@ jobs:
             # Copy/update the main file
             echo "Copying $FILE_PATH to $TARGET_FILE"
             cp "$FILE_PATH" "$TARGET_FILE"
+            FILES_UPDATED="true"
             
             # If this is a solution template, also look for and copy corresponding specs file
             if [[ "$FOLDER_TYPE" == "solution-templates" && "$FILENAME" =~ -sol-template\.yaml$ ]]; then
@@ -361,30 +369,130 @@ jobs:
             
             echo "✅ Successfully processed $APP_NAME/$FILENAME (version $VERSION)"
             
-            # Write to a temp file to persist the variable across subshell
+            # Write to temp files to persist variables across subshell
             echo "$FOLDERS_CREATED" > /tmp/folders_created
+            echo "$FILES_UPDATED" > /tmp/files_updated
+            
+            # Add app to affected apps list if not already present
+            CURRENT_AFFECTED_APPS=$(cat /tmp/affected_apps 2>/dev/null || echo "[]")
+            UPDATED_AFFECTED_APPS=$(echo "$CURRENT_AFFECTED_APPS" | jq --arg app "$APP_NAME" 'if . | index($app) then . else . + [$app] end')
+            echo "$UPDATED_AFFECTED_APPS" > /tmp/affected_apps
+            
+            # Track processed versions for this app
+            CURRENT_PROCESSED_VERSIONS=$(cat /tmp/processed_versions 2>/dev/null || echo "$PROCESSED_VERSIONS")
+            UPDATED_PROCESSED_VERSIONS=$(echo "$CURRENT_PROCESSED_VERSIONS" | jq --arg app "$APP_NAME" --arg type "$FOLDER_TYPE" --arg version "$VERSION" '
+              .[$app] = (.[$app] // {"schemas": [], "solution_templates": []}) | 
+              .[$app][$type] |= (if . | index($version) then . else . + [$version] end)
+            ')
+            echo "$UPDATED_PROCESSED_VERSIONS" > /tmp/processed_versions
           done
           
-          # Read the final state
+          # Read the final states
           if [[ -f /tmp/folders_created ]]; then
             FOLDERS_CREATED_FINAL=$(cat /tmp/folders_created)
           else
             FOLDERS_CREATED_FINAL="false"
           fi
           
+          if [[ -f /tmp/files_updated ]]; then
+            FILES_UPDATED_FINAL=$(cat /tmp/files_updated)
+          else
+            FILES_UPDATED_FINAL="false"
+          fi
+          
+          if [[ -f /tmp/affected_apps ]]; then
+            AFFECTED_APPS_FINAL=$(cat /tmp/affected_apps)
+          else
+            AFFECTED_APPS_FINAL="[]"
+          fi
+          
+          if [[ -f /tmp/processed_versions ]]; then
+            PROCESSED_VERSIONS_FINAL=$(cat /tmp/processed_versions)
+          else
+            PROCESSED_VERSIONS_FINAL="{}"
+          fi
+          
+          # Set outputs
           echo "folders_created=$FOLDERS_CREATED_FINAL" >> $GITHUB_OUTPUT
-          echo "Final result: folders_created=$FOLDERS_CREATED_FINAL"
+          echo "files_updated=$FILES_UPDATED_FINAL" >> $GITHUB_OUTPUT
+          echo "affected_apps=$AFFECTED_APPS_FINAL" >> $GITHUB_OUTPUT
+          echo "processed_versions=$PROCESSED_VERSIONS_FINAL" >> $GITHUB_OUTPUT
+          
+          echo "Final results:"
+          echo "  folders_created=$FOLDERS_CREATED_FINAL"
+          echo "  files_updated=$FILES_UPDATED_FINAL"
+          echo "  affected_apps=$AFFECTED_APPS_FINAL"
+          echo "  processed_versions=$PROCESSED_VERSIONS_FINAL"
 
       - name: Commit version folder changes
-        if: steps.create-folders.outputs.folders_created == 'true'
+        if: steps.create-folders.outputs.files_updated == 'true'
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Auto-created version folders for solution templates and schemas"
           file_pattern: ".pg/apps/*/workload-orchestration/solution-templates/*/* .pg/apps/*/workload-orchestration/schemas/*/*"
 
+      - name: Merge app lists and changes
+        id: merge-apps
+        run: |
+          ORIGINAL_APPS='${{ needs.detect-apps-resources-to-update.outputs.apps }}'
+          ORIGINAL_CHANGES='${{ needs.detect-apps-resources-to-update.outputs.app_changes }}'
+          AFFECTED_APPS='${{ steps.create-folders.outputs.affected_apps }}'
+          PROCESSED_VERSIONS='${{ steps.create-folders.outputs.processed_versions }}'
+          
+          echo "Original apps: $ORIGINAL_APPS"
+          echo "Original changes: $ORIGINAL_CHANGES"
+          echo "Affected apps: $AFFECTED_APPS"
+          echo "Processed versions: $PROCESSED_VERSIONS"
+          
+          # Handle empty arrays gracefully
+          if [[ "$ORIGINAL_APPS" == "null" || "$ORIGINAL_APPS" == "" ]]; then
+            ORIGINAL_APPS="[]"
+          fi
+          if [[ "$ORIGINAL_CHANGES" == "null" || "$ORIGINAL_CHANGES" == "" ]]; then
+            ORIGINAL_CHANGES="{}"
+          fi
+          if [[ "$AFFECTED_APPS" == "null" || "$AFFECTED_APPS" == "" ]]; then
+            AFFECTED_APPS="[]"
+          fi
+          if [[ "$PROCESSED_VERSIONS" == "null" || "$PROCESSED_VERSIONS" == "" ]]; then
+            PROCESSED_VERSIONS="{}"
+          fi
+          
+          # Merge the app changes structures using jq
+          MERGED_APP_CHANGES=$(echo "$ORIGINAL_CHANGES $PROCESSED_VERSIONS" | jq -s '
+            .[0] as $original | .[1] as $processed |
+            
+            # Start with original structure
+            $original |
+            
+            # For each app in processed versions, merge the arrays
+            reduce ($processed | to_entries[]) as $entry (.; 
+              .[$entry.key] = {
+                schemas: ((.[$entry.key].schemas // []) + ($entry.value.schemas // []) | unique),
+                solution_templates: ((.[$entry.key].solution_templates // []) + ($entry.value.solution_templates // []) | unique)
+              }
+            )
+          ')
+          
+          # Merge and deduplicate app names
+          MERGED_APPS=$(echo "$ORIGINAL_APPS $AFFECTED_APPS" | jq -s 'add | unique | map(select(length > 0))')
+          
+          # Compact JSON
+          MERGED_APP_CHANGES_COMPACT=$(echo "$MERGED_APP_CHANGES" | jq -c .)
+          
+          echo "merged_apps=$MERGED_APPS" >> $GITHUB_OUTPUT
+          echo "merged_app_changes=$MERGED_APP_CHANGES_COMPACT" >> $GITHUB_OUTPUT
+          
+          echo "Final merged apps: $MERGED_APPS"
+          echo "Final merged changes:"
+          echo "$MERGED_APP_CHANGES" | jq .
+
   update-wo-artifacts:
-    needs: [detect-apps-resources-to-update]
-    if: needs.detect-apps-resources-to-update.outputs.apps != '[]' && (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none')
+    needs: [detect-apps-resources-to-update, manage-version-folders]
+    if: |
+      (needs.detect-apps-resources-to-update.outputs.apps != '[]' && 
+       (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none')) ||
+      (needs.manage-version-folders.outputs.files_updated == 'true')
     runs-on: ubuntu-latest
     outputs:
       files_created: ${{ steps.check-created.outputs.files_created }}
@@ -392,9 +500,10 @@ jobs:
       fail-fast: false
       max-parallel: 4  # Limit to 4 concurrent jobs
       matrix:
-        app_name: ${{ fromJson(needs.detect-apps-resources-to-update.outputs.apps) }}
+        app_name: ${{ fromJson(needs.manage-version-folders.outputs.merged_apps || needs.detect-apps-resources-to-update.outputs.apps) }}
     
     steps:
+
       - name: Azure Login with OIDC
         uses: azure/login@v2
         with:
@@ -535,7 +644,8 @@ jobs:
             esac
           else
             # For push events, check changed files and determine actions based on versioned files only
-            APP_CHANGES='${{ needs.detect-apps-resources-to-update.outputs.app_changes }}'
+            # Use merged app changes if available (from manage-version-folders), otherwise use original
+            APP_CHANGES='${{ needs.manage-version-folders.outputs.merged_app_changes || needs.detect-apps-resources-to-update.outputs.app_changes }}'
             
             # Check if this app has changes
             APP_DATA=$(echo "$APP_CHANGES" | jq --arg app "${{ matrix.app_name }}" '.[$app] // empty')
