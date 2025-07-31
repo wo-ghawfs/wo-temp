@@ -1,0 +1,5 @@
+capabilities:
+  - azure-soap
+  - azure-shampoo
+description: 'testapp5'
+enable-external-validation: 'false'
