@@ -380,7 +380,7 @@ jobs:
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Auto-created version folders for solution templates and schemas"
-          file_pattern: ".pg/apps/*/workload-orchestration/solution-templates/*/ .pg/apps/*/workload-orchestration/schemas/*/"
+          file_pattern: ".pg/apps/*/workload-orchestration/solution-templates/*/* .pg/apps/*/workload-orchestration/schemas/*/*"
 
   update-wo-artifacts:
     needs: [detect-apps-resources-to-update]
