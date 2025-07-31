@@ -1,5 +1,10 @@
 name: wo-cm-onboarding-v2
 
+# Add concurrency control to prevent multiple instances running simultaneously
+concurrency:
+  group: wo-cm-onboarding-v2-${{ github.ref }}
+  cancel-in-progress: false
+
 on:
   push:
     branches:
@@ -1190,6 +1195,56 @@ jobs:
           # List what was copied for debugging
           echo "Files copied:"
           find .pg -name "*.json" -o -name "*.yaml" | head -20
+
+      - name: Pull latest changes before committing
+        run: |
+          echo "Fetching latest changes from remote..."
+          git fetch origin
+          
+          echo "Current branch status:"
+          git status --porcelain
+          
+          echo "Checking if remote has moved ahead..."
+          LOCAL=$(git rev-parse HEAD)
+          REMOTE=$(git rev-parse origin/main)
+          
+          if [ "$LOCAL" != "$REMOTE" ]; then
+            echo "Remote branch has moved ahead. Attempting to rebase..."
+            
+            # Stash any uncommitted changes
+            if [[ -n $(git status --porcelain) ]]; then
+              echo "Stashing uncommitted changes..."
+              git stash push -m "Auto-stash before rebase"
+              STASHED=true
+            else
+              STASHED=false
+            fi
+            
+            # Try to rebase
+            if git rebase origin/main; then
+              echo "✅ Rebase successful"
+              
+              # Pop stashed changes if any
+              if [ "$STASHED" = true ]; then
+                echo "Applying stashed changes..."
+                git stash pop
+              fi
+            else
+              echo "❌ Rebase failed. This might require manual intervention."
+              git rebase --abort
+              
+              # Pop stashed changes if any
+              if [ "$STASHED" = true ]; then
+                echo "Applying stashed changes..."
+                git stash pop
+              fi
+              
+              echo "Falling back to merge strategy..."
+              git pull --no-rebase origin main
+            fi
+          else
+            echo "✅ Local and remote are in sync"
+          fi
 
       - name: Commit all generated files
         uses: stefanzweifel/git-auto-commit-action@v5
