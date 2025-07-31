@@ -87,6 +87,7 @@ jobs:
     outputs:
       apps: ${{ github.event_name == 'workflow_dispatch' && steps.app-list-dispatch.outputs.apps || steps.app-list.outputs.apps }}
       app_changes: ${{ steps.detect-changes.outputs.app_changes }}
+      root_template_changes: ${{ steps.detect-changes.outputs.root_template_changes }}
     steps:
       - name: Git Info
         id: check-author
@@ -120,8 +121,9 @@ jobs:
         if: github.event_name == 'push' || github.event_name == 'workflow_run'
         id: detect-changes
         run: |
-          # Initialize app changes object
+          # Initialize app changes object and root template changes array
           APP_CHANGES="{}"
+          ROOT_TEMPLATE_CHANGES="[]"
           
           # Get all changed files
           CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
@@ -142,9 +144,33 @@ jobs:
               app_name="${BASH_REMATCH[1]}"
               folder_type="${BASH_REMATCH[2]}"
               version="${BASH_REMATCH[3]}"
+            # Check for ROOT-LEVEL solution template files (not in version subdirectories)
+            elif [[ "$file" =~ ^\.pg/apps/([^/]+)/workload-orchestration/solution-templates/([^/]+)\.yaml$ ]]; then
+              root_app_name="${BASH_REMATCH[1]}"
+              root_filename="${BASH_REMATCH[2]}.yaml"
+              
+              # Only process solution template files, skip common app and ignore standalone specs.json changes
+              if [[ "$root_app_name" != "common" && "$root_filename" =~ -sol-template\.yaml$ ]]; then
+                echo "Found root-level template change: $root_app_name - $file"
+                
+                # Add to root template changes
+                ROOT_TEMPLATE_CHANGES=$(echo "$ROOT_TEMPLATE_CHANGES" | jq --arg app "$root_app_name" --arg file "$file" '. + [{"app": $app, "file": $file}]')
+              fi
+            # Check for ROOT-LEVEL schema files (not in version subdirectories)
+            elif [[ "$file" =~ ^\.pg/apps/([^/]+)/workload-orchestration/schemas/([^/]+)\.yaml$ ]]; then
+              root_app_name="${BASH_REMATCH[1]}"
+              root_filename="${BASH_REMATCH[2]}.yaml"
+              
+              # Only process schema files, skip common app
+              if [[ "$root_app_name" != "common" && "$root_filename" =~ -schema\.yaml$ ]]; then
+                echo "Found root-level schema change: $root_app_name - $file"
+                
+                # Add to root template changes
+                ROOT_TEMPLATE_CHANGES=$(echo "$ROOT_TEMPLATE_CHANGES" | jq --arg app "$root_app_name" --arg file "$file" '. + [{"app": $app, "file": $file}]')
+              fi
             fi
             
-            # Process the file if it matched one of the patterns
+            # Process the versioned file if it matched one of the patterns
             if [[ -n "$app_name" && -n "$folder_type" && -n "$version" ]]; then
               # Skip common app processing here (handled separately)
               if [[ "$app_name" == "common" ]]; then
@@ -167,16 +193,22 @@ jobs:
             fi
           done <<< "$(echo "$CHANGED_FILES" | tr ' ' '\n')"
           
-          # Write to temporary file and read back (to handle while loop subshell issue)
+          # Write to temporary files and read back (to handle while loop subshell issue)
           echo "$APP_CHANGES" > /tmp/app_changes.json
+          echo "$ROOT_TEMPLATE_CHANGES" > /tmp/root_template_changes.json
           APP_CHANGES_FINAL=$(cat /tmp/app_changes.json)
+          ROOT_TEMPLATE_CHANGES_FINAL=$(cat /tmp/root_template_changes.json)
           
           # Compact the JSON to prevent GitHub Actions output formatting issues
           APP_CHANGES_COMPACT=$(echo "$APP_CHANGES_FINAL" | jq -c .)
+          ROOT_TEMPLATE_CHANGES_COMPACT=$(echo "$ROOT_TEMPLATE_CHANGES_FINAL" | jq -c .)
           
           echo "app_changes=$APP_CHANGES_COMPACT" >> $GITHUB_OUTPUT
+          echo "root_template_changes=$ROOT_TEMPLATE_CHANGES_COMPACT" >> $GITHUB_OUTPUT
           echo "Detected versioned app changes:"
           echo "$APP_CHANGES_FINAL" | jq .
+          echo "Detected root-level template changes:"
+          echo "$ROOT_TEMPLATE_CHANGES_FINAL" | jq .
 
       - name: Extract and validate apps for update
         if: github.event_name == 'workflow_dispatch'
@@ -213,6 +245,142 @@ jobs:
           APPS=$(printf '%s\n' "${VALID_APPS[@]}" | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "apps=$APPS" >> $GITHUB_OUTPUT
           echo "✅ Final app list: $APPS"
+
+  manage-version-folders:
+    needs: [detect-apps-resources-to-update]
+    if: (github.event_name == 'push' || github.event_name == 'workflow_run') && needs.detect-apps-resources-to-update.outputs.root_template_changes != '[]'
+    runs-on: ubuntu-latest
+    outputs:
+      folders_created: ${{ steps.create-folders.outputs.folders_created }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Source composite actions
+        uses: ./.github/actions/wo-utilities/
+        with:
+          utilities: "yq"
+
+      - name: Create version folders and copy files
+        id: create-folders
+        run: |
+          set -e
+          
+          ROOT_TEMPLATE_CHANGES='${{ needs.detect-apps-resources-to-update.outputs.root_template_changes }}'
+          FOLDERS_CREATED="false"
+          
+          echo "Processing root template changes..."
+          echo "$ROOT_TEMPLATE_CHANGES" | jq .
+          
+          # Process each changed file
+          echo "$ROOT_TEMPLATE_CHANGES" | jq -c '.[]' | while read -r change; do
+            APP_NAME=$(echo "$change" | jq -r '.app')
+            FILE_PATH=$(echo "$change" | jq -r '.file')
+            
+            echo ""
+            echo "Processing: $APP_NAME - $FILE_PATH"
+            
+            # Check if file exists
+            if [[ ! -f "$FILE_PATH" ]]; then
+              echo "⚠️ Warning: File not found: $FILE_PATH"
+              continue
+            fi
+            
+            # Extract version from metadata (only for YAML files)
+            if [[ "$FILE_PATH" =~ \.yaml$ ]]; then
+              VERSION=$(yq eval '.metadata.version' "$FILE_PATH" 2>/dev/null || echo "")
+            else
+              echo "⚠️ Warning: Unsupported file type: $FILE_PATH"
+              continue
+            fi
+            
+            if [[ -z "$VERSION" || "$VERSION" == "null" ]]; then
+              echo "⚠️ Warning: Could not extract version from $FILE_PATH"
+              continue
+            fi
+            
+            # Validate version format (semantic versioning)
+            if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "⚠️ Warning: Invalid version format '$VERSION' in $FILE_PATH (expected X.Y.Z)"
+              continue
+            fi
+            
+            echo "✅ Extracted version: $VERSION"
+            
+            # Determine target directory based on file path
+            if [[ "$FILE_PATH" =~ /workload-orchestration/solution-templates/ ]]; then
+              BASE_DIR=".pg/apps/$APP_NAME/workload-orchestration/solution-templates"
+              FOLDER_TYPE="solution-templates"
+            elif [[ "$FILE_PATH" =~ /workload-orchestration/schemas/ ]]; then
+              BASE_DIR=".pg/apps/$APP_NAME/workload-orchestration/schemas"
+              FOLDER_TYPE="schemas"
+            else
+              echo "⚠️ Warning: Unknown file path pattern: $FILE_PATH"
+              continue
+            fi
+            
+            VERSION_DIR="$BASE_DIR/$VERSION"
+            FILENAME=$(basename "$FILE_PATH")
+            TARGET_FILE="$VERSION_DIR/$FILENAME"
+            
+            echo "Target directory: $VERSION_DIR (type: $FOLDER_TYPE)"
+            echo "Target file: $TARGET_FILE"
+            
+            # Create version directory if it doesn't exist
+            if [[ ! -d "$VERSION_DIR" ]]; then
+              echo "Creating version directory: $VERSION_DIR"
+              mkdir -p "$VERSION_DIR"
+              FOLDERS_CREATED="true"
+            else
+              echo "Version directory already exists: $VERSION_DIR"
+            fi
+            
+            # Copy/update the main file
+            echo "Copying $FILE_PATH to $TARGET_FILE"
+            cp "$FILE_PATH" "$TARGET_FILE"
+            
+            # If this is a solution template, also look for and copy corresponding specs file
+            if [[ "$FOLDER_TYPE" == "solution-templates" && "$FILENAME" =~ -sol-template\.yaml$ ]]; then
+              # Look for corresponding specs.json file in the same directory
+              SOURCE_DIR=$(dirname "$FILE_PATH")
+              
+              # Look for specs file matching *-specs.json pattern
+              SPECS_FILE=$(find "$SOURCE_DIR" -maxdepth 1 -name "*-specs.json" -type f 2>/dev/null | head -1)
+              if [[ -f "$SPECS_FILE" ]]; then
+                SPECS_FILENAME=$(basename "$SPECS_FILE")
+                TARGET_SPECS_FILE="$VERSION_DIR/$SPECS_FILENAME"
+                
+                echo "Found corresponding specs file: $SPECS_FILE"
+                echo "Copying specs file: $SPECS_FILE to $TARGET_SPECS_FILE"
+                cp "$SPECS_FILE" "$TARGET_SPECS_FILE"
+                echo "✅ Successfully copied specs file: $SPECS_FILENAME"
+              fi
+            fi
+            
+            echo "✅ Successfully processed $APP_NAME/$FILENAME (version $VERSION)"
+            
+            # Write to a temp file to persist the variable across subshell
+            echo "$FOLDERS_CREATED" > /tmp/folders_created
+          done
+          
+          # Read the final state
+          if [[ -f /tmp/folders_created ]]; then
+            FOLDERS_CREATED_FINAL=$(cat /tmp/folders_created)
+          else
+            FOLDERS_CREATED_FINAL="false"
+          fi
+          
+          echo "folders_created=$FOLDERS_CREATED_FINAL" >> $GITHUB_OUTPUT
+          echo "Final result: folders_created=$FOLDERS_CREATED_FINAL"
+
+      - name: Commit version folder changes
+        if: steps.create-folders.outputs.folders_created == 'true'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto-created version folders for solution templates and schemas"
+          file_pattern: ".pg/apps/*/workload-orchestration/solution-templates/*/ .pg/apps/*/workload-orchestration/schemas/*/"
 
   update-wo-artifacts:
     needs: [detect-apps-resources-to-update]
@@ -864,7 +1032,7 @@ jobs:
           retention-days: 1
           if-no-files-found: warn
 
-  commit-generated-files:
+  commit-solution-files:
     needs: [update-wo-artifacts, update_common_artifacts]
     if: always() && (needs.update-wo-artifacts.outputs.files_created == 'true' || needs.update_common_artifacts.outputs.files_created == 'true')
     runs-on: ubuntu-latest
@@ -925,7 +1093,7 @@ jobs:
           file_pattern: ".pg/**"
 
   report-schema-validation-errors:
-    needs: [update-wo-artifacts, commit-generated-files]
+    needs: [update-wo-artifacts, commit-solution-files]
     if: always() && needs.update-wo-artifacts.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
@@ -1029,7 +1197,7 @@ jobs:
           fi
 
   report-common-schema-validation-errors:
-    needs: [update_common_artifacts, commit-generated-files]
+    needs: [update_common_artifacts, commit-solution-files]
     if: always() && needs.update_common_artifacts.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
@@ -1121,7 +1289,7 @@ jobs:
 
 
   report-config-template-validation-errors:
-    needs: [update_common_artifacts, commit-generated-files]
+    needs: [update_common_artifacts, commit-solution-files]
     if: always() && needs.update_common_artifacts.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
@@ -1236,7 +1404,7 @@ jobs:
           failed-templates-details: ${{ env.ALL_FAILED_DETAILS }}
 
   report-template-validation-errors:
-    needs: [update-wo-artifacts, commit-generated-files]
+    needs: [update-wo-artifacts, commit-solution-files]
     if: always() && needs.update-wo-artifacts.result != 'skipped'
     runs-on: ubuntu-latest
     steps:
