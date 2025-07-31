@@ -513,8 +513,14 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           enable-AzPSSession: true
 
+      - name: Ensure latest changes from manage-version-folders
+        run: |
+          git fetch origin
+          git checkout origin/${{ github.ref_name }}
+
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
       - name: Source composite actions
