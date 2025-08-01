@@ -204,7 +204,7 @@ jobs:
               if [[ "$folder_type" == "schemas" ]]; then
                 APP_CHANGES=$(echo "$APP_CHANGES" | jq --arg app "$app_name" --arg version "$version" '.[$app].schemas |= if . | index($version) then . else . + [$version] end')
               elif [[ "$folder_type" == "solution-templates" ]]; then
-                APP_CHANGES=$(echo "$APP_CHANGES" | jq --arg app "$app_name" --arg version "$version" '.[$app].solution-templates |= if . | index($version) then . else . + [$version] end')
+                APP_CHANGES=$(echo "$APP_CHANGES" | jq --arg app "$app_name" --arg version "$version" '.[$app]["solution-templates"] |= if . | index($version) then . else . + [$version] end')
               fi
             fi
           done <<< "$(echo "$EXISTING_FILES" | tr ' ' '\n')"
