@@ -7,3 +7,6 @@ versions:
   - version: 0.3.3
     solutionTemplateVersionId: /subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/jn-ghawf-euap/providers/Microsoft.Edge/solutionTemplates/testapp5-solution/versions/0.3.3
     revisions: []
+  - version: 0.3.4
+    solutionTemplateVersionId: /subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/jn-ghawf-euap/providers/Microsoft.Edge/solutionTemplates/testapp5-solution/versions/0.3.4
+    revisions: []
