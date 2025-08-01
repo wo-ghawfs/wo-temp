@@ -531,7 +531,7 @@ jobs:
       - name: Ensure latest changes
         run: |
           git fetch origin
-          git checkout origin/${{ github.ref_name }}
+          git reset --hard origin/${{ github.ref_name }}
 
       - name: Source composite actions
         uses: ./.github/actions/wo-utilities/
@@ -1165,7 +1165,7 @@ jobs:
       - name: Ensure latest changes
         run: |
           git fetch origin
-          git checkout origin/${{ github.ref_name }}
+          git reset --hard origin/${{ github.ref_name }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
