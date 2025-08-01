@@ -1,0 +1,16 @@
+{
+  "components": [
+    {
+      "name": "adaptor",
+      "type": "helm.v3",
+      "properties": {
+        "chart": {
+          "repo": "contosocm.azurecr.io/helm/csad-featurizer",
+          "version": "3.0.0", 
+          "wait": true,
+          "timeout": "11m"
+        }
+      }
+    }
+  ]
+}

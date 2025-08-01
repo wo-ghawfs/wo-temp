@@ -1204,11 +1204,6 @@ jobs:
               fi
             fi
           done
-          
-          # List what was copied for debugging
-          echo "Files copied:"
-          find .pg -name "*.json" -o -name "*.yaml" | head -20
-
 
       - name: Commit all generated files
         uses: stefanzweifel/git-auto-commit-action@v5
