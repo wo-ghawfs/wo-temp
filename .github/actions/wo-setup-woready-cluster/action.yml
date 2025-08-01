@@ -153,6 +153,11 @@ runs:
         yq -i ".name = \"${{ steps.custLoc.outputs.custLocId }}\"" .pg/sites/${{ inputs.site }}/custom-location.json
         echo "Updated CL: .pg/sites/${{ inputs.site }}/custom-location.json"
 
+    - name: get latest changes
+      shell: bash
+      run: |
+        git pull origin main
+
     - name: update custom-location
       # Commit all changed files back to the repository
       uses: stefanzweifel/git-auto-commit-action@v5
