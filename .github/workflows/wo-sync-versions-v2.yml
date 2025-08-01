@@ -99,5 +99,10 @@ jobs:
           fi
         done
 
+    - name: get latest changes
+      shell: bash
+      run: |
+        git pull origin main
+
     - name: Commit changes
       uses: stefanzweifel/git-auto-commit-action@v5
