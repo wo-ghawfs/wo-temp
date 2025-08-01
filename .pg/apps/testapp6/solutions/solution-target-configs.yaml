@@ -5,14 +5,14 @@ solution-templates:
       - version: 0.3.0
         instanceName: "testapp6-inst-030"
         sites:
-          - siteName: "eugene"
+          - siteName: "frisco"
             targets:
-              - targetName: "eug-li-1"
+              - targetName: "fsc-li-1"
                 override:
                   ErrorThreshold: 0301
                   TemperatureRangeMax: "03011"
 
-              - targetName: "eug-li-2"
+              - targetName: "fsc-li-2"
                 override:
                   ErrorThreshold: 0302
                   TemperatureRangeMax: "03022"
