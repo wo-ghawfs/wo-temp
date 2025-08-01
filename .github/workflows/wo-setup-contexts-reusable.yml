@@ -49,5 +49,7 @@ jobs:
 
     - name: Create context 
       if: ${{ steps.check-wo-ready.outputs.woready == 'true' }}
-      uses: ./.github/actions/wo-update-context
+      uses: ./.github/actions/wo-setup-contexts
+        site: ${{ inputs.site }}
+        rg: ${{ inputs.rg }}
     
