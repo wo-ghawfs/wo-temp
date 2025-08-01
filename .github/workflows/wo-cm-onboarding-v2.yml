@@ -264,7 +264,6 @@ jobs:
 
   manage-version-folders:
     needs: [detect-apps-resources-to-update]
-    if: (github.event_name == 'push' || github.event_name == 'workflow_run') && needs.detect-apps-resources-to-update.outputs.root_template_changes != '[]'
     runs-on: ubuntu-latest
     outputs:
       folders_created: ${{ steps.create-folders.outputs.folders_created }}
@@ -499,11 +498,10 @@ jobs:
           echo "$MERGED_APP_CHANGES" | jq .
 
   update-wo-artifacts:
-    needs: [detect-apps-resources-to-update, manage-version-folders]
+    needs: [manage-version-folders]
     if: |
-      (needs.detect-apps-resources-to-update.outputs.apps != '[]' && 
-       (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none')) ||
-      (needs.manage-version-folders.outputs.files_updated == 'true')
+      (needs.manage-version-folders.outputs.merged_apps != '[]' && 
+       (github.event_name != 'workflow_dispatch' || github.event.inputs.action != 'none'))
     runs-on: ubuntu-latest
     outputs:
       files_created: ${{ steps.check-created.outputs.files_created }}
@@ -511,7 +509,7 @@ jobs:
       fail-fast: false
       max-parallel: 4  # Limit to 4 concurrent jobs
       matrix:
-        app_name: ${{ fromJson(needs.manage-version-folders.outputs.merged_apps || needs.detect-apps-resources-to-update.outputs.apps) }}
+        app_name: ${{ fromJson(needs.manage-version-folders.outputs.merged_apps || '[]') }}
     
     steps:
 
@@ -654,8 +652,8 @@ jobs:
             esac
           else
             # For push events, check changed files and determine actions based on versioned files only
-            # Use merged app changes if available (from manage-version-folders), otherwise use original
-            APP_CHANGES='${{ needs.manage-version-folders.outputs.merged_app_changes || needs.detect-apps-resources-to-update.outputs.app_changes }}'
+            # Use merged app changes from manage-version-folders
+            APP_CHANGES='${{ needs.manage-version-folders.outputs.merged_app_changes }}'
             
             # Check if this app has changes
             APP_DATA=$(echo "$APP_CHANGES" | jq --arg app "${{ matrix.app_name }}" '.[$app] // empty')

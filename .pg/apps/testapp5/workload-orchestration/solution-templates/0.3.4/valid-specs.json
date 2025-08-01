@@ -1,5 +1,5 @@
 {
-      "components": [
+      "components": [ 
         {
           "name": "helmcomponent",
           "type": "helm.v3",
