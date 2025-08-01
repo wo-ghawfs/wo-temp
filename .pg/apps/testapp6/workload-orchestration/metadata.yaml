@@ -1,0 +1,5 @@
+capabilities:
+  - azure-soap
+  - azure-shampoo
+description: 'testapp6'
+enable-external-validation: 'false'
