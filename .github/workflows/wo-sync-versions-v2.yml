@@ -73,6 +73,7 @@ jobs:
             fi
 
             cd $updVer
+
             cp ../*-schema.yaml .
             yq -i '.metadata.version = env(updVer)' *-schema.yaml
         
@@ -85,6 +86,7 @@ jobs:
             fi
 
             cd $updVer
+
             cp ../*-sol-template.yaml .
             yq -i '.metadata.version = env(updVer)' *-template.yaml
             
