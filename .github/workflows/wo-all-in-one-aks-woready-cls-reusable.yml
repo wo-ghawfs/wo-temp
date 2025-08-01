@@ -70,6 +70,12 @@ jobs:
         woextn: ${{ steps.check-wo-ready.outputs.woextn }}
         aiocrt: ${{ steps.check-wo-ready.outputs.aiocrt }}
 
+    - name: Create contexts
+      uses: ./.github/actions/wo-setup-contexts
+      with:
+        site: ${{ inputs.site }}
+        rg: ${{ inputs.rg }}
+
     - name: Create service groups
       uses: ./.github/actions/wo-setup-svgrps
       with:
