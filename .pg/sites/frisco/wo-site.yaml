@@ -1,0 +1,9 @@
+site:
+  siteRG:                       "wf-rg-frisco"
+  aksLocation: 			"eastus2euap"
+  aksClusterName: 		"wf-frisco-cls"
+  aksClusterIdentity: 		"wf-frisco-clsId"
+  customLocationRG: 		"wf-rg-frisco"
+  customLocationName: 		"wf-frisco-custlocation"
+  customLocationLocation:       "eastus2euap"
+  customLocationNamespace: 	"wf-frisco-ns"
