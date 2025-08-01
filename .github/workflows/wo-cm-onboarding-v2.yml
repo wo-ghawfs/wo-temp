@@ -134,7 +134,17 @@ jobs:
           # Get all changed files
           CHANGED_FILES="${{ steps.changed-files.outputs.all_changed_files }}"
           
-          # Process each changed file - ONLY process versioned files
+          # Filter out deleted files before processing
+          EXISTING_FILES=""
+          while IFS= read -r file; do
+            if [[ -f "$file" ]]; then
+              EXISTING_FILES="$EXISTING_FILES $file"
+            else
+              echo "Skipping deleted file: $file"
+            fi
+          done <<< "$(echo "$CHANGED_FILES" | tr ' ' '\n')"
+          
+          # Process each existing changed file - ONLY process versioned files
           while IFS= read -r file; do
             app_name=""
             folder_type=""
@@ -197,7 +207,7 @@ jobs:
                 APP_CHANGES=$(echo "$APP_CHANGES" | jq --arg app "$app_name" --arg version "$version" '.[$app].solution-templates |= if . | index($version) then . else . + [$version] end')
               fi
             fi
-          done <<< "$(echo "$CHANGED_FILES" | tr ' ' '\n')"
+          done <<< "$(echo "$EXISTING_FILES" | tr ' ' '\n')"
           
           # Write to temporary files and read back (to handle while loop subshell issue)
           echo "$APP_CHANGES" > /tmp/app_changes.json
@@ -513,15 +523,15 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           enable-AzPSSession: true
 
-      - name: Ensure latest changes from manage-version-folders
-        run: |
-          git fetch origin
-          git checkout origin/${{ github.ref_name }}
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
+
+      - name: Ensure latest changes
+        run: |
+          git fetch origin
+          git checkout origin/${{ github.ref_name }}
 
       - name: Source composite actions
         uses: ./.github/actions/wo-utilities/
