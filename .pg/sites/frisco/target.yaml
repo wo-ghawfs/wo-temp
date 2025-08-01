@@ -1,29 +1,29 @@
 target:
   frisco:
-  - name: "fsc-ft-1"
-    level: "factory"
-    caps:
-      - azure-soap
-      - azure-shampoo
-    scope: "frisco"
-    spec: "targetspecs.json"
-    # system updated
-    targetId: "/subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/wf-rg-eugene/providers/Microsoft.edge/targets/eug-ft-1"
-  - name: "fsc-li-1"
-    level: "line"
-    caps:
-      - azure-soap
-      - azure-shampoo
-    scope: "frisco"
-    spec: "targetspecs.json"
-    # system updated
-    targetId: "/subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/wf-rg-eugene/providers/Microsoft.edge/targets/eug-li-1"
-  - name: "fsc-li-2"
-    level: "line"
-    caps:
-      - azure-soap
-      - azure-shampoo
-    scope: "frisco"
-    spec: "targetspecs.json"
-    #system updated
-    targetId: "/subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/wf-rg-eugene/providers/Microsoft.edge/targets/eug-li-2"
+    - name: "fsc-ft-1"
+      level: "factory"
+      caps:
+        - azure-soap
+        - azure-shampoo
+      scope: "frisco"
+      spec: "targetspecs.json"
+      # system updated
+      targetId: "/subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/jn-ghawf-euap/providers/Microsoft.edge/targets/fsc-ft-1"
+    - name: "fsc-li-1"
+      level: "line"
+      caps:
+        - azure-soap
+        - azure-shampoo
+      scope: "frisco"
+      spec: "targetspecs.json"
+      # system updated
+      targetId: "/subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/jn-ghawf-euap/providers/Microsoft.edge/targets/fsc-li-1"
+    - name: "fsc-li-2"
+      level: "line"
+      caps:
+        - azure-soap
+        - azure-shampoo
+      scope: "frisco"
+      spec: "targetspecs.json"
+      #system updated
+      targetId: "/subscriptions/d1e52cbc-b073-42e2-a0a0-c2f547118a6e/resourceGroups/jn-ghawf-euap/providers/Microsoft.edge/targets/fsc-li-2"
