@@ -1,0 +1,7 @@
+ErrorThreshold: 70
+HealthCheckEndpoint: test-solution-1-hp
+EnableLocalLog: false
+AgentEndpoint: test-solution-1-ae
+HealthCheckEnabled: false
+ApplicationEndpoint: test-solution-1-ap
+TemperatureRangeMax: 100
