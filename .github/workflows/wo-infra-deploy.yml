@@ -48,6 +48,7 @@ on:
         - canton
         - denver
         - eugene
+        - frisco
         - tanzu
         required: true
       commands:
