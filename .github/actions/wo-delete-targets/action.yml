@@ -41,7 +41,7 @@ runs:
         az rest --method delete --url "$targetId/providers/Microsoft.Relationships/serviceGroupMember/SGRelation?api-version=2023-09-01-preview" 
 
         echo "Deleting target $target_name..."
-        az workload-orchestration target delete --resource-group "$wfrg" --name "$target_name" -y
+        az workload-orchestration target delete --resource-group "$wfrg" --name "$target_name" --force-delete -y
       }
 
       # check is targets exist
