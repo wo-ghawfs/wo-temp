@@ -67,16 +67,16 @@ runs:
                      --body "{'properties':{'displayName':'$svcgrp_name','parent': { 'resourceId': '/providers/Microsoft.Management/serviceGroups/$parent'}}}" \
                      --resource https://management.azure.com
 
-          ## sleep 45 
+          sleep 45 
           # verify the service group got provisioned
           echo "verify SG created ..."
           ## az rest --method get --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" --query id -o tsv
 
           pstatus=""
           while [ "$pstatus" != "Succeeded" ]; do
+            sleep 30
             pstatus=$(az rest --method get --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" --query properties.provisioningState -o tsv)
             echo "provisioning state ... $pstatus"
-            sleep 15
           done
 
           # hard code for MSFT tenant from  provideAppId
