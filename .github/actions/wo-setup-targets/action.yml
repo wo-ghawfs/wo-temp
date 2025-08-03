@@ -81,12 +81,12 @@ runs:
                                  --context-id "/subscriptions/${{ steps.siteinfo.outputs.ctxSub }}/resourceGroups/${{ steps.siteinfo.outputs.ctxRG }}/providers/Microsoft.Edge/contexts/${{ steps.siteinfo.outputs.ctxName }}"
                                  # --context-id "/subscriptions/973d15c6-6c57-447e-b9c6-6d79b5b784ab/resourceGroups/Mehoopany/providers/Microsoft.Edge/contexts/Mehoopany-Context"
 
-        
+        sleep 30
         pstatus=""
         while [ "$pstatus" != "Succeeded" ]; do
+          sleep 30
           pstatus=$(az workload-orchestration target show --resource-group "$wfrg" --name "$target_name" --query properties.provisioningState -o tsv)
           echo "provisioning state ... $pstatus"
-          sleep 15 
         done
 
         #link target to svcgrp
