@@ -61,17 +61,14 @@ runs:
           svcgrp_name="${site}-svc-$level"
 
           echo "Creating svcgrp : $svcgrp_name "
-
           az rest --method put --headers "Content-Type=application/json" \
                      --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" \
                      --body "{'properties':{'displayName':'$svcgrp_name','parent': { 'resourceId': '/providers/Microsoft.Management/serviceGroups/$parent'}}}" \
                      --resource https://management.azure.com
 
-          sleep 45 
+          sleep 60 
           # verify the service group got provisioned
           echo "verify SG created ..."
-          ## az rest --method get --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name?$api_ver" --query id -o tsv
-
           pstatus=""
           while [ "$pstatus" != "Succeeded" ]; do
             sleep 30
@@ -91,10 +88,6 @@ runs:
                   --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name/providers/Microsoft.Edge/sites/$svcgrp_name?api-version=2025-03-01-preview" \
                   --body "{'properties':{'displayName':'$svcgrp_name','description': '$svcgrp_name','labels': {'level': '$level'}}}" \
                   --resource https://management.azure.com
-          # az rest --method put \
-          #         --url "https://management.azure.com/providers/Microsoft.Management/serviceGroups/$svcgrp_name/providers/Microsoft.Edge/sites/${{ inputs.site }}?api-version=2025-03-01-preview" \
-          #         --body "{'properties':{'displayName':'$svcgrp_name','description': '$svcgrp_name','labels': {'level': '$level'}}}" \
-          #         --resource https://management.azure.com
 
           #set parent for lower level
           parent=$svcgrp_name
@@ -108,7 +101,5 @@ runs:
       echo "update site reference in context"
       az workload-orchestration context site-reference create --subscription "$ctxSub" --resource-group "$ctxRG" --context-name "$ctxName" --name "$top_svcgrp" \
                               --site-id "/providers/Microsoft.Management/serviceGroups/$top_svcgrp/providers/Microsoft.Edge/sites/$top_svcgrp" 
-      # az workload-orchestration context site-reference create --subscription "$ctxSub" --resource-group "$ctxRG" --context-name "$ctxName" --name "$top_svcgrp" \
-      #                         --site-id "/providers/Microsoft.Management/serviceGroups/$top_svcgrp/providers/Microsoft.Edge/sites/${{ inputs.site }}" 
 
       echo "All service groups created and site reference updated"
