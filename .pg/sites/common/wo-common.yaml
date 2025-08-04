@@ -21,7 +21,7 @@ sites:
   siteList: "albany,bethel,canton,denver,eugene,frisco,tanzu"
  
 hierarchy:
-  levels: "Country,Region,Factory,Line"
+  levels: "country,region,factory,line"
 
 providerAppId:
 # Usage: for various role assignments
