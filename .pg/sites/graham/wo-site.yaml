@@ -1,0 +1,9 @@
+site:
+  siteRG:                       "wf-rg-graham"
+  aksLocation: 			"eastus2euap"
+  aksClusterName: 		"wf-graham-cls"
+  aksClusterIdentity: 		"wf-graham-clsId"
+  customLocationRG: 		"wf-rg-graham"
+  customLocationName: 		"wf-graham-custlocation"
+  customLocationLocation:       "eastus2euap"
+  customLocationNamespace: 	"wf-graham-ns"

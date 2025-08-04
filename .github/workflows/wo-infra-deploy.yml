@@ -49,6 +49,7 @@ on:
         - denver
         - eugene
         - frisco
+        - graham
         - tanzu
         required: true
       commands:
