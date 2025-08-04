@@ -116,6 +116,9 @@ runs:
         echo "Target created. Associate target to svcgrp ..."
         az rest --method put --url "$targetId/providers/Microsoft.Relationships/serviceGroupMember/SGRelation?api-version=2023-09-01-preview" \
                              --body "{'properties':{ 'targetId': '/providers/Microsoft.Management/serviceGroups/${{ inputs.site }}-svc-$target_level'}}"
+
+        # update target
+        az workload-orchestration target update --resource-group "$wfrg" --name "$target_name"
       done
 
       az cloud update --endpoint-resource-manager "https://management.azure.com"
