@@ -234,7 +234,7 @@ Note: The capabilities of solutions and targets are matched before attempting an
 
 ```mermaid
 graph TD
-    A[ Push to main (deployments.yaml)] --> | auto | B[Process deployments]
+    A[ Push to main] --> | auto | B[Process deployments.yaml]
     B --> C{deployments requested ?}
     C --> |Yes| D[Loop through deployment entries]
     C --> |No| H[Done]
