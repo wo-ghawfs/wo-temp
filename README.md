@@ -157,18 +157,24 @@ The workflows are configured to work with the following repo folder structure or
     * capabilities.json
   * albany
     * custom-location.json
+    * target.yaml
+    * wo-site.yaml
+    * targetspecs.json
   * bethel
-    * custom-location.json
-  * canton
-    * custom-location.json
-  * denver
-    * custom-location.json
-  * eugene
+    * target.yaml
+    * wo-site.yaml
+    * targetspecs.json
     * custom-location.json
   * tanzu
     * custom-location.json
+    * target.yaml
+    * wo-site.yaml
+    * targetspecs.json
+  * etc 
 
 ### File Structure Explanation
+
+### *APPS*
 
 The workload orchestration structure uses a two-tiered approach:
 
@@ -184,6 +190,25 @@ The workload orchestration structure uses a two-tiered approach:
 
 3. **Generated Files** (solutions directory): Created by workflows during deployment process
    - Configuration templates and other artifacts generated during the CI/CD process
+
+### *SITES/TARGETS*
+
+The sites/ folder is used to configure details for different sites and end targets 
+
+- `wo-site.yaml`         : Used to specify the site/plant details
+- `target.yaml`          : Used to specify end target details - names, capabilities etc
+- `custom-location.json` : Auto-updated with the custom-location details of the site
+- `targetspecs.json`     : Defines the site characteristics to process solution types
+
+### *SOLUTIONS*
+
+The solutions/ folder is used to configure the solutions to be deployed to one or more targets
+
+- `testapp-solution.yaml`        : This file is auto-generated and retain details of current solutions and their versions
+- `solution-target-configs.yaml` : This file contains the target level configurations for each solution version
+- `defaultbaseconfig`            : This file is used to maintain a default set of associated target config values. The solution-target-configs can override specific values for each target
+- `deployments.yaml`             : This file will drive the deployment flow 
+
 
 ## WORKFLOWS
 
