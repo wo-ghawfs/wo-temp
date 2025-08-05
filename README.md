@@ -230,6 +230,7 @@ graph TD
 This workflow is intended to help with configuration, publish and deployment of a solution across target(s) with Git based configurations
 
 All the configurations are maintained in a hierarchical folder structure on a per solution per target basis.
+
 Note: The capabilities of solutions and targets are matched before attempting any deployment.
 
 ```mermaid
@@ -240,6 +241,8 @@ graph TD
     C --> |No| H[Done]
     D --> F{matching capabilities?}
     F --> |Yes| G[configure,publish & deploy]
+    G --> H
+    G --> D
 ```
 
 ## wo_pullreq
