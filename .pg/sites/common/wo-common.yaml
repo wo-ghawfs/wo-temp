@@ -33,7 +33,6 @@ providerAppId:
   eventgrid: "4962773b-9cdb-44cf-a8bf-237846a00ab7"
 
 workloadorchestration:
-  whlVer: "workload_orchestration-1.1.8-py3-none-any.whl"
   extensionVer: "2.1.2"
   extensionName: "workloadorchestration"
   release-train: "stable"

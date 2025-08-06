@@ -56,9 +56,6 @@ outputs:
   sitecusLocNS:
     description: The custom location namespace
     value: ${{ steps.siteinfo.outputs.sitecusLocNS }}
-  whlVer:
-    description: workload-orchestration WHL file
-    value: ${{ steps.siteinfo.outputs.whlVer }}
   extnVer:
     description: WO extension version
     value: ${{ steps.siteinfo.outputs.extnVer }}
@@ -131,7 +128,6 @@ runs:
         echo "sitecusLocName=$(yq '.site.customLocationName' .pg/sites/${{ inputs.site }}/wo-site.yaml)" >> $GITHUB_OUTPUT
         echo "sitecusLocation=$(yq '.site.customLocationLocation' .pg/sites/${{ inputs.site }}/wo-site.yaml)" >> $GITHUB_OUTPUT
 
-        echo "whlVer=$(yq '.workloadorchestration.whlVer' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
         echo "extnVer=$(yq '.workloadorchestration.extensionVer' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
         echo "extnName=$(yq '.workloadorchestration.extensionName' .pg/sites/common/wo-common.yaml)" >> $GITHUB_OUTPUT
 
@@ -158,7 +154,6 @@ runs:
         echo "sitecusLocName:   ${{ steps.siteinfo.outputs.sitecusLocName }}"
         echo "sitecusLocation:  ${{ steps.siteinfo.outputs.sitecusLocation}}"
         echo "sitecusLocNS:     ${{ steps.siteinfo.outputs.sitecusLocNS }}"
-        echo "whlVer:           ${{ steps.siteinfo.outputs.whlVer }}"
         echo "extnVer:          ${{ steps.siteinfo.outputs.extnVer }}"
         echo "extnName:         ${{ steps.siteinfo.outputs.extnName }}"
         echo "levels:           ${{ steps.siteinfo.outputs.levels }}"
