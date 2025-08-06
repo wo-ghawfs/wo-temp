@@ -1,0 +1,15 @@
+metadata:
+  name: testapp6-solution
+  version: 0.3.1
+schema:
+  name: testapp6-schema
+  version: 0.3.0
+configs:
+  AppName: TESTSOLUTION
+  ErrorThreshold: ${{$val(ErrorThreshold)}}
+  HealthCheckEndpoint: ${{$val(HealthCheckEndpoint)}}
+  EnableLocalLog: ${{$val(EnableLocalLog)}}
+  AgentEndpoint: ${{$val(AgentEndpoint)}}
+  HealthCheckEnabled: ${{$val(HealthCheckEnabled)}}
+  ApplicationEndpoint: ${{$val(ApplicationEndpoint)}}
+  TemperatureRangeMax: ${{$val(TemperatureRangeMax)}}
