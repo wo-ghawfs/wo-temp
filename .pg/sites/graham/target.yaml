@@ -1,14 +1,5 @@
 target:
   graham:
-    - name: "ghm-ft-1"
-      level: "factory"
-      caps:
-        - azure-soap
-        - azure-shampoo
-      scope: "graham"
-      spec: "targetspecs.json"
-      # system updated
-      targetId: ""
     - name: "ghm-li-1"
       level: "line"
       caps:
@@ -17,13 +8,4 @@ target:
       scope: "graham"
       spec: "targetspecs.json"
       # system updated
-      targetId: ""
-    - name: "ghm-li-2"
-      level: "line"
-      caps:
-        - azure-soap
-        - azure-shampoo
-      scope: "graham"
-      spec: "targetspecs.json"
-      #system updated
       targetId: ""
