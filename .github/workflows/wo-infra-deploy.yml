@@ -30,7 +30,6 @@ on:
         - (** new AKS **) wo-setup-woready-aks-cls
         - (** new AKS **) wo-setup-woready-allinone-aks-cls
         - wo-setup-contexts
-        - wo-setup-sites
         - wo-setup-svgrps
         - wo-setup-targets
         - wo-delete-targets
