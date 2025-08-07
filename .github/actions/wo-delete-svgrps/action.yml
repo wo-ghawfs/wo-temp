@@ -25,16 +25,6 @@ runs:
     shell: bash
     run: |
       # Source common and context info
-      # ctxTenant=$(yq '.common.tenantId' .pg/sites/common/wo-common.yaml)
-
-      # ctxRG=$(yq '.context.contextRG' .pg/sites/common/wo-common.yaml)
-      # ctxName=$(yq '.context.contextName' .pg/sites/common/wo-common.yaml)
-      # ctxLoc=$(yq '.context.contextLocation' .pg/sites/common/wo-common.yaml)
-      # ctxSub=$(yq '.context.contextSubscriptionId' .pg/sites/common/wo-common.yaml)
-
-      # wfloc=$(yq '.site.aksLocation' .pg/sites/${{ inputs.site }}/wo-site.yaml)
-      # wfrg=$(yq '.site.customLocationRG' .pg/sites/${{ inputs.site }}/wo-site.yaml) 
-
       
       echo "---- new code ---"
       # Source common and context info
@@ -48,8 +38,6 @@ runs:
 
       levels_str=$(yq -r '.hierarchy.levels' .pg/sites/common/wo-common.yaml)
       IFS=',' read -ra levels <<< "$levels_str"
-      # num_levels=${#levels[@]}
-      # set one lower since last layer does not have a svcgrp
       num_levels=$((${#levels[@]} - 1))
 
       if [ "$num_levels" -eq 0 ]; then
